@@ -1,0 +1,9 @@
+# Laravel scheduler tick — runs every minute, dispatches due scheduled tasks.
+# Install as /etc/cron.d/g3-access-scheduler on the EC2 instance.
+#
+# The command calls `php artisan schedule:run`, which reads routes/console.php
+# and dispatches anything due this tick (e.g., g3:run-scheduled-full-scans at 03:15).
+#
+# Adjust path and user if your deploy target differs.
+
+* * * * * www-data php /var/www/g3-access-dashboard/artisan schedule:run >> /var/log/g3-access-scheduler.log 2>&1

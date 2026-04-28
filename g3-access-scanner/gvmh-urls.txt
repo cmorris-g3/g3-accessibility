@@ -1,0 +1,23 @@
+# gvmh.org — cherry-picked 20 URLs, chosen for template + content-type coverage
+# Run: node dist/cli.js audit https://www.gvmh.org --url-list gvmh-urls.txt --max-pages 20
+
+https://www.gvmh.org/
+https://www.gvmh.org/about/
+https://www.gvmh.org/services/
+https://www.gvmh.org/locations/
+https://www.gvmh.org/events/
+https://www.gvmh.org/careers/
+https://www.gvmh.org/appointment/
+https://www.gvmh.org/find-a-provider/
+https://www.gvmh.org/newsletter-signup/
+https://www.gvmh.org/billing/
+https://www.gvmh.org/insurance/
+https://www.gvmh.org/financial-assistance/
+https://www.gvmh.org/notice-of-privacy-practices/
+https://www.gvmh.org/food-and-nutrition-services/
+https://www.gvmh.org/location/hospital/
+https://www.gvmh.org/location/clinton-clinic/
+https://www.gvmh.org/events/blood-drive/
+https://www.gvmh.org/staff/aften-anderson/
+https://www.gvmh.org/staff-type/leadership/
+https://www.gvmh.org/dr-cassie-white-is-accepting-patients-in-clinton/

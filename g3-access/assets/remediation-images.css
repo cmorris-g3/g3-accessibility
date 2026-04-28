@@ -1,0 +1,224 @@
+.g3-remediation-images .description,
+.g3-remediation-menus .description {
+    max-width: 800px;
+}
+
+.g3-rem-tabs {
+    display: flex;
+    gap: 0;
+    margin: 16px 0 0 0;
+    border-bottom: 1px solid #c3c4c7;
+}
+.g3-rem-tab {
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #50575e;
+    cursor: pointer;
+    margin-bottom: -1px;
+}
+.g3-rem-tab:hover {
+    color: #1d2327;
+}
+.g3-rem-tab.is-active {
+    color: #2271b1;
+    border-bottom-color: #2271b1;
+    font-weight: 600;
+}
+
+.g3-rem-controls {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin: 12px 0;
+    padding: 10px 14px;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+}
+.g3-rem-controls label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+}
+
+.g3-rem-meta {
+    margin: 6px 0 10px 0;
+    color: #50575e;
+    font-size: 13px;
+    min-height: 18px;
+}
+
+.g3-rem-list {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.g3-rem-empty {
+    margin: 0;
+    padding: 20px;
+    color: #50575e;
+    text-align: center;
+}
+
+.g3-rem-row {
+    display: grid;
+    grid-template-columns: 100px 1.2fr 2fr 1fr auto;
+    gap: 16px;
+    align-items: flex-start;
+    padding: 14px;
+    border-bottom: 1px solid #e0e0e1;
+    transition: opacity 300ms ease, background-color 150ms ease;
+}
+.g3-rem-row:last-child {
+    border-bottom: 0;
+}
+.g3-rem-row.g3-rem-row--ignored {
+    background: #f6f7f7;
+}
+.g3-rem-row.g3-rem-row--removing {
+    opacity: 0;
+    pointer-events: none;
+}
+.g3-rem-row.g3-rem-row--saving {
+    background: #f0f6fc;
+}
+
+.g3-rem-thumb {
+    width: 100px;
+    height: 100px;
+    background: #f0f0f1;
+    border: 1px solid #dcdcde;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+.g3-rem-thumb a {
+    display: block;
+    line-height: 0;
+}
+.g3-rem-thumb img {
+    max-width: 100%;
+    max-height: 100%;
+    display: block;
+}
+
+.g3-rem-info {
+    font-size: 13px;
+    line-height: 1.5;
+    min-width: 0;
+}
+.g3-rem-info .g3-rem-filename {
+    font-weight: 600;
+    word-break: break-all;
+}
+.g3-rem-info .g3-rem-meta-line {
+    color: #646970;
+    font-size: 12px;
+    margin-top: 2px;
+}
+.g3-rem-info a.g3-rem-media-edit {
+    font-size: 12px;
+    margin-top: 2px;
+    display: inline-block;
+}
+
+.g3-rem-alt {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.g3-rem-alt label {
+    font-size: 12px;
+    color: #50575e;
+    font-weight: 600;
+}
+.g3-rem-alt input[type="text"] {
+    width: 100%;
+    font-size: 14px;
+    padding: 6px 8px;
+}
+
+.g3-rem-used {
+    font-size: 13px;
+    color: #50575e;
+    min-width: 0;
+}
+.g3-rem-used strong {
+    color: #1d2327;
+    display: block;
+    word-break: break-word;
+}
+.g3-rem-used-none {
+    color: #8c8f94;
+    font-style: italic;
+    font-size: 12px;
+}
+
+.g3-rem-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: stretch;
+    min-width: 150px;
+}
+.g3-rem-actions .button {
+    justify-content: center;
+}
+
+.g3-rem-row-status {
+    font-size: 12px;
+    color: #50575e;
+    margin-top: 4px;
+    min-height: 16px;
+}
+.g3-rem-row-status.is-ok {
+    color: #2d5e32;
+}
+.g3-rem-row-status.is-error {
+    color: #b32d2e;
+}
+
+.g3-rem-pagination {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin: 14px 0;
+    font-size: 13px;
+    align-items: center;
+}
+.g3-rem-pagination .button[disabled] {
+    opacity: 0.5;
+}
+
+.g3-rem-toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1d2327;
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 4px;
+    font-size: 13px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    z-index: 100;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 200ms ease;
+}
+.g3-rem-toast.is-visible {
+    opacity: 1;
+}
+.g3-rem-toast.is-error {
+    background: #b32d2e;
+}

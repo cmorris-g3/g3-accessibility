@@ -1,0 +1,30 @@
+{
+  "name": "g3-access-scanner",
+  "version": "0.1.0",
+  "description": "Scanner powering the G3 Access remediation plugin. Fork of the audit-pipeline scanner with single-page + URL-discovery subcommands.",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "scanner": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/cli.js",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@axe-core/playwright": "^4.10.0",
+    "commander": "^12.1.0",
+    "pngjs": "^7.0.0",
+    "playwright": "^1.48.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/pngjs": "^6.0.5",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

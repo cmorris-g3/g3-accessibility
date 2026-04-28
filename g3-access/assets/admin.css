@@ -1,0 +1,313 @@
+.g3-access-settings .g3-access-status {
+    margin-top: 1em;
+}
+
+/* Findings table column widths — Issue gets everything remaining, metadata columns are fixed. */
+.g3-findings-table .g3-col-issue    { width: auto; }
+.g3-findings-table .g3-col-page     { width: 220px; }
+.g3-findings-table .g3-col-severity { width: 90px; }
+.g3-findings-table .g3-col-status   { width: 90px; }
+.g3-findings-table .g3-col-actions  { width: 110px; }
+@media (max-width: 1200px) {
+    .g3-findings-table .g3-col-page     { width: 180px; }
+}
+.g3-findings-table td,
+.g3-findings-table th {
+    vertical-align: top;
+}
+.g3-findings-table td code {
+    word-break: break-all;
+    font-size: 12px;
+}
+
+/* Two-row-per-finding layout: summary row is compact, details row spans full width. */
+.g3-findings-table tr.g3-row-summary td {
+    padding-top: 12px;
+    padding-bottom: 6px;
+}
+.g3-findings-table tr.g3-row-details > td {
+    padding: 0 12px 16px 12px;
+    border-top: 0;
+    background: inherit;
+}
+.g3-findings-table tr.g3-row-summary {
+    border-top: 1px solid #dcdcde;
+}
+.g3-findings-table tbody tr.g3-row-summary:first-child {
+    border-top: 0;
+}
+
+.g3-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 18px;
+    background: #eee;
+    color: #222;
+}
+
+.g3-pill--ok,
+.g3-pill--resolved {
+    background: #d4edda;
+    color: #155724;
+}
+
+.g3-pill--open {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.g3-pill--regressed,
+.g3-pill--fail {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.g3-pill--ignored,
+.g3-pill--off {
+    background: #e2e3e5;
+    color: #383d41;
+}
+
+.g3-sev {
+    text-transform: capitalize;
+    font-weight: 600;
+}
+.g3-sev--critical { color: #721c24; }
+.g3-sev--serious  { color: #9c4200; }
+.g3-sev--moderate { color: #856404; }
+.g3-sev--minor    { color: #666; }
+
+.g3-filters {
+    margin: 1em 0;
+    padding: 10px 14px;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    display: flex;
+    gap: 1em;
+    flex-wrap: wrap;
+    align-items: end;
+}
+.g3-filters label {
+    display: flex;
+    flex-direction: column;
+    font-size: 12px;
+    color: #555;
+}
+
+.g3-summary {
+    font-size: 14px;
+    margin: 1em 0;
+}
+.g3-summary .g3-pill {
+    margin-right: 8px;
+}
+
+#wpadminbar .g3-ab-label {
+    margin-right: 6px;
+}
+#wpadminbar .g3-ab-pill {
+    display: inline-block;
+    padding: 0 7px;
+    min-width: 18px;
+    line-height: 18px;
+    border-radius: 9px;
+    font-size: 11px;
+    font-weight: 700;
+    background: #555;
+    color: #fff;
+    text-align: center;
+}
+#wpadminbar .g3-ab-pill[data-state="ok"]        { background: #2e7d32; }
+#wpadminbar .g3-ab-pill[data-state="findings"]  { background: #b27400; }
+#wpadminbar .g3-ab-pill[data-state="fail"]      { background: #c62828; }
+#wpadminbar .g3-ab-pill[data-state="running"]   { background: #1976d2; }
+
+.g3-mb-counts {
+    list-style: none;
+    padding: 0;
+    margin: 0.5em 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    font-size: 12px;
+}
+.g3-mb-counts li {
+    margin: 0;
+}
+.g3-mb-rescan-status {
+    font-size: 12px;
+    color: #555;
+    font-style: italic;
+}
+
+.g3-rationale {
+    margin: 4px 0 8px 0;
+    color: #2c3338;
+}
+
+.g3-ctx {
+    list-style: none;
+    margin: 0 0 8px 0;
+    padding: 8px 12px;
+    background: #f6f7f7;
+    border-left: 3px solid #c3c4c7;
+    border-radius: 2px;
+    font-size: 13px;
+}
+.g3-ctx li {
+    margin: 2px 0;
+    line-height: 1.5;
+}
+.g3-ctx-label {
+    font-weight: 600;
+    color: #50575e;
+    margin-right: 6px;
+}
+.g3-ctx code,
+.g3-target code {
+    background: #fff;
+    padding: 1px 5px;
+    border-radius: 2px;
+    border: 1px solid #dcdcde;
+    font-size: 12px;
+    word-break: break-all;
+}
+
+.g3-target {
+    margin: 6px 0;
+    font-size: 13px;
+}
+
+.g3-snippet {
+    margin: 6px 0;
+    font-size: 13px;
+}
+.g3-snippet summary {
+    cursor: pointer;
+    color: #2271b1;
+    user-select: none;
+}
+.g3-snippet summary:hover {
+    text-decoration: underline;
+}
+.g3-snippet pre {
+    margin: 6px 0 0 0;
+    padding: 8px 10px;
+    background: #1e1e1e;
+    color: #e6e6e6;
+    border-radius: 3px;
+    font-size: 12px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.g3-why {
+    margin: 10px 0 4px 0;
+    padding: 8px 12px;
+    background: #f0f6fc;
+    border-left: 3px solid #2271b1;
+    border-radius: 2px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+.g3-why strong {
+    color: #135e96;
+    margin-right: 4px;
+}
+
+.g3-fix {
+    margin: 8px 0 4px 0;
+    font-size: 13px;
+    padding: 8px 12px;
+    background: #edf6ed;
+    border-left: 3px solid #4ca154;
+    border-radius: 2px;
+    line-height: 1.5;
+}
+.g3-fix strong {
+    color: #2d5e32;
+    margin-right: 4px;
+}
+.g3-fix ol {
+    margin: 6px 0 0 20px;
+    padding: 0;
+}
+.g3-fix ol li {
+    margin: 4px 0;
+}
+.g3-doc-link {
+    margin: 8px 0 0 0;
+    font-size: 12px;
+}
+.g3-doc-link a {
+    color: #2d5e32;
+}
+
+.g3-conflicts {
+    margin: 8px 0;
+    padding: 8px 12px;
+    background: #fff3e7;
+    border-left: 3px solid #e58a3a;
+    border-radius: 2px;
+    font-size: 13px;
+}
+.g3-conflicts strong {
+    display: block;
+    color: #7a4a10;
+    margin-bottom: 4px;
+}
+.g3-conflicts ul {
+    margin: 4px 0 0 0;
+    padding: 0;
+    list-style: none;
+}
+.g3-conflicts li {
+    margin: 3px 0;
+    line-height: 1.5;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+.g3-conflict-target,
+.g3-conflict-href {
+    background: #fff;
+    padding: 1px 5px;
+    border-radius: 2px;
+    border: 1px solid #dcdcde;
+    font-size: 12px;
+    word-break: break-all;
+}
+.g3-conflict-arrow {
+    color: #7a4a10;
+    font-weight: 600;
+}
+
+.g3-note {
+    margin: 8px 0 0 0;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-style: italic;
+    color: #50575e;
+    background: #fff8e5;
+    border-left: 3px solid #dba617;
+    border-radius: 2px;
+    line-height: 1.5;
+}
+.g3-note-label {
+    font-style: normal;
+    font-weight: 600;
+    color: #8a6d00;
+    margin-right: 4px;
+}
+
+.g3-ignored-reason {
+    margin: 6px 0 0 0;
+    font-size: 12px;
+    color: #646970;
+}

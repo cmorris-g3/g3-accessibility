@@ -1,0 +1,54 @@
+{
+  "run_id": "fixture-A",
+  "site": "example.com",
+  "generated_at": "2026-04-23T00:00:00Z",
+  "sop_version": "0.2",
+  "model": "test",
+  "findings": [
+    {
+      "check": "alt-text",
+      "source": "rubric",
+      "finding_type": "missing-alt",
+      "url": "https://example.com/",
+      "target": "img#hero",
+      "severity": "serious",
+      "wcag": "WCAG 2.2 SC 1.1.1 (Level A)",
+      "rationale": "Image has no alt attribute.",
+      "current_value": null,
+      "suggested_fix": "Add a descriptive alt attribute.",
+      "confidence": "high",
+      "context": { "image_id": "hero", "src": "/img/hero.jpg" },
+      "fingerprint": "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111"
+    },
+    {
+      "check": "link-text",
+      "source": "rubric",
+      "finding_type": "generic-link-text",
+      "url": "https://example.com/",
+      "target": "a.cta",
+      "severity": "serious",
+      "wcag": "WCAG 2.2 SC 2.4.4 (Level A)",
+      "rationale": "Link text is generic.",
+      "current_value": "click here",
+      "suggested_fix": "Make the link text describe its destination.",
+      "confidence": "high",
+      "context": { "href": "https://example.com/about", "in_nav": false },
+      "fingerprint": "bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222"
+    },
+    {
+      "check": "target-size",
+      "source": "scanner",
+      "finding_type": "target-below-24px",
+      "url": "https://example.com/",
+      "target": "button.icon",
+      "severity": "serious",
+      "wcag": "WCAG 2.2 SC 2.5.8 (Level AA)",
+      "rationale": "Target size 20x20 below WCAG 2.5.8 minimum of 24x24.",
+      "current_value": "<button class=\"icon\">x</button>",
+      "suggested_fix": "Increase padding.",
+      "confidence": "high",
+      "context": { "width": 20, "height": 20 },
+      "fingerprint": "cccc3333cccc3333cccc3333cccc3333cccc3333cccc3333cccc3333cccc3333"
+    }
+  ]
+}
