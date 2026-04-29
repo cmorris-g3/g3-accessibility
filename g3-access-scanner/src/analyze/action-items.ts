@@ -203,6 +203,19 @@ const EXCLUDED_FROM_ACTION_ITEMS: ReadonlySet<string> = new Set([
   'contrast-below-aaa',
 ]);
 
+// Finding types where the flagged element IS an image. For these, action-items
+// embeds the actual image (parsed from the finding's current_value HTML) so
+// the dev can see what they're writing alt text for, instead of guessing from
+// a CSS selector. Pandoc embeds external images into the docx during the
+// markdown→docx conversion in ReportBuilder.
+const IMAGE_FINDING_TYPES: ReadonlySet<string> = new Set([
+  'missing-alt',
+  'poor-alt',
+  'redundant-alt',
+  'miscategorized-decorative',
+  'alt-describes-appearance',
+]);
+
 const TASK_BLOCKING: ReadonlySet<string> = new Set([
   'empty-link',
   'keyboard-trap',
@@ -468,6 +481,7 @@ export function renderActionItems(items: ActionItem[], manifest: Manifest): stri
     const metaAfter: string[] = [];
     let bullets: string[] | null = null;
 
+    let imageEmbed: string | null = null;
     if (item.level === 'instance') {
       metaBefore.push(`**Page:** ${item.url}`);
       if (item.selector) {
@@ -475,6 +489,18 @@ export function renderActionItems(items: ActionItem[], manifest: Manifest): stri
       }
       if (item.current_value) {
         metaBefore.push(`**Currently:** \`${truncate(item.current_value, 200)}\``);
+      }
+      // For image-related findings, embed the actual image so the dev can see
+      // what they're addressing. Pandoc gfm reader handles plain `![]()` —
+      // pandoc fetches and embeds the image into the docx during conversion.
+      // No size attribute (gfm doesn't support pandoc's `{ width=4in }`); if
+      // hero-size logos dominate the page in practice, we'll switch the reader
+      // to commonmark_x or use an inline <img width> tag.
+      if (IMAGE_FINDING_TYPES.has(item.finding_type) && item.current_value) {
+        const src = extractImageSrc(item.current_value, item.url ?? '');
+        if (src) {
+          imageEmbed = `![Flagged image](${src})`;
+        }
       }
     } else {
       metaBefore.push(`**Scope:** site-wide CSS / template change.`);
@@ -504,6 +530,12 @@ export function renderActionItems(items: ActionItem[], manifest: Manifest): stri
       const isLast = i === metaAfter.length - 1;
       lines.push(metaAfter[i] + (isLast ? '' : '  '));
     }
+
+    if (imageEmbed) {
+      lines.push('');
+      lines.push(imageEmbed);
+    }
+
     lines.push('');
   }
 
@@ -584,4 +616,24 @@ function truncate(s: string, max: number): string {
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/**
+ * Pull the first <img src="..."> URL out of an HTML snippet and resolve it
+ * against the page URL so relative/protocol-relative paths become absolute.
+ * Returns null if no usable image URL is found (e.g., data: URIs, missing src).
+ */
+export function extractImageSrc(html: string, pageUrl: string): string | null {
+  const match = html.match(/<img[^>]*\bsrc\s*=\s*["']([^"']+)["']/i);
+  if (!match) return null;
+  const raw = match[1].trim();
+  if (!raw) return null;
+  // data:/blob: are embeddable inline by some renderers but not by pandoc-fetch.
+  // Skip them — the docx would just break.
+  if (/^(data|blob):/i.test(raw)) return null;
+  try {
+    return new URL(raw, pageUrl).toString();
+  } catch {
+    return null;
+  }
 }

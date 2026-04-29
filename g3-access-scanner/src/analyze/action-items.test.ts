@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import type { Finding } from '../types.js';
-import { selectActionItems } from './action-items.js';
+import { selectActionItems, renderActionItems, extractImageSrc } from './action-items.js';
+import type { Manifest } from '../types.js';
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -211,6 +212,105 @@ test('per-instance items carry URL + selector + current value for actionability'
   assert.equal(items[0].selector, 'header > nav.utility > a:nth-child(3)');
   assert.equal(items[0].current_value, '<a href="/login"></a>');
   assert.ok(items[0].guidance.length > 0, 'guidance text must be present');
+});
+
+test('extractImageSrc — pulls absolute URL from img tag', () => {
+  const html = '<a href="/"><img alt="" src="https://example.com/logo.png" /></a>';
+  assert.equal(
+    extractImageSrc(html, 'https://example.com/page'),
+    'https://example.com/logo.png',
+  );
+});
+
+test('extractImageSrc — resolves relative URL against the page URL', () => {
+  const html = '<img src="/assets/hero.jpg" alt="">';
+  assert.equal(
+    extractImageSrc(html, 'https://example.com/about'),
+    'https://example.com/assets/hero.jpg',
+  );
+});
+
+test('extractImageSrc — resolves protocol-relative URL', () => {
+  const html = '<img src="//cdn.example.com/x.png" alt="">';
+  assert.equal(
+    extractImageSrc(html, 'https://example.com/page'),
+    'https://cdn.example.com/x.png',
+  );
+});
+
+test('extractImageSrc — handles real fasthealth-style URL from sabetha', () => {
+  const html = '<a href="/"><img alt="" decoding="async" loading="lazy" src="https://pictures.fasthealth.com/client_images/3543/2e53b7d.png" style="width: 293px; height: 98px;"></a>';
+  assert.equal(
+    extractImageSrc(html, 'https://www.sabethahospital.com/getpage.php?name=contact'),
+    'https://pictures.fasthealth.com/client_images/3543/2e53b7d.png',
+  );
+});
+
+test('extractImageSrc — skips data: and blob: URIs', () => {
+  assert.equal(extractImageSrc('<img src="data:image/png;base64,iVBORw0..." alt="">', 'https://x.test/'), null);
+  assert.equal(extractImageSrc('<img src="blob:https://x.test/abc" alt="">', 'https://x.test/'), null);
+});
+
+test('extractImageSrc — returns null when no img tag', () => {
+  assert.equal(extractImageSrc('<a>just a link</a>', 'https://x.test/'), null);
+});
+
+test('renderActionItems — embeds image markdown for image-finding types', () => {
+  const findings = [
+    makeFinding({
+      finding_type: 'missing-alt',
+      url: 'https://x.test/page',
+      target: 'main > img',
+      current_value: '<img src="https://cdn.test/logo.png" alt="">',
+    }),
+  ];
+  const items = selectActionItems(findings, 1);
+  const manifest: Manifest = {
+    contract_version: '0.1',
+    site: 'x.test',
+    site_slug: 'x-test',
+    run_id: 'r',
+    started_at: '',
+    ended_at: '2026-04-29T00:00:00Z',
+    urls: ['https://x.test/page'],
+    tools: { scanner: '', axe_core: '', playwright: '', node: '' },
+    viewport: { w: 0, h: 0 },
+    user_agent: '',
+    wcag_version: '2.2',
+    wcag_levels: ['A', 'AA'],
+  };
+
+  const md = renderActionItems(items, manifest);
+  assert.match(md, /!\[Flagged image\]\(https:\/\/cdn\.test\/logo\.png\)$/m, 'image embed should be present on its own line');
+});
+
+test('renderActionItems — does NOT embed images for non-image finding types', () => {
+  const findings = [
+    makeFinding({
+      finding_type: 'empty-link',
+      url: 'https://x.test/',
+      target: 'a.btn',
+      current_value: '<a href="/login"></a>',
+    }),
+  ];
+  const items = selectActionItems(findings, 1);
+  const manifest: Manifest = {
+    contract_version: '0.1',
+    site: 'x.test',
+    site_slug: 'x-test',
+    run_id: 'r',
+    started_at: '',
+    ended_at: '2026-04-29T00:00:00Z',
+    urls: ['https://x.test/'],
+    tools: { scanner: '', axe_core: '', playwright: '', node: '' },
+    viewport: { w: 0, h: 0 },
+    user_agent: '',
+    wcag_version: '2.2',
+    wcag_levels: ['A', 'AA'],
+  };
+
+  const md = renderActionItems(items, manifest);
+  assert.doesNotMatch(md, /!\[Flagged image\]/);
 });
 
 test('template items list affected URLs for traceability', () => {
