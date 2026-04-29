@@ -298,6 +298,7 @@ export interface ActionItem {
   covers_findings: number;  // 1 for instance items; N for template items
   time_minutes: number;
   affected_urls: string[];  // for template items, the URLs the fix benefits
+  context: Record<string, unknown> | null;  // sample finding's context for finding-type-specific rendering
 }
 
 interface Candidate extends ActionItem {
@@ -349,6 +350,7 @@ export function selectActionItems(findings: Finding[], totalPages: number): Acti
         covers_findings: group.length,
         time_minutes: time,
         affected_urls: [...new Set(group.map((f) => f.url))].sort(),
+        context: group[0].context ?? null,
         score,
       });
     } else {
@@ -397,6 +399,7 @@ export function selectActionItems(findings: Finding[], totalPages: number): Acti
           covers_findings: fpGroup.length,
           time_minutes: time,
           affected_urls: uniqueUrls,
+          context: sample.context ?? null,
           score,
         });
       }
@@ -511,6 +514,12 @@ export function renderActionItems(items: ActionItem[], manifest: Manifest): stri
       if (item.current_value) {
         metaBefore.push(`**Currently:** \`${truncate(item.current_value, 200)}\``);
       }
+      // Surface link destination for link-text findings — the dev needs to
+      // know where the link points to write a meaningful accessible name.
+      const href = stringField(item.context, 'href');
+      if (href && LINK_TEXT_TYPES.has(item.finding_type)) {
+        metaBefore.push(`**Destination:** \`${truncate(href, 150)}\``);
+      }
       // For image-related findings, surface the image URL as a clickable link
       // so the dev can open it in a browser to see what they're addressing.
       if (IMAGE_FINDING_TYPES.has(item.finding_type) && item.current_value) {
@@ -519,7 +528,21 @@ export function renderActionItems(items: ActionItem[], manifest: Manifest): stri
           metaBefore.push(`**Image URL:** [${src}](${src})`);
         }
       }
-      if (isMultiPage && item.affected_urls.length <= 8) {
+      // For redundant-link-text, list the conflicting links (same visible
+      // text, different destinations) so the dev can see ALL the duplicates
+      // at once and add disambiguating context to each.
+      if (item.finding_type === 'redundant-link-text' && Array.isArray(item.context?.conflicts)) {
+        const conflicts = item.context!.conflicts as Array<{ target?: string; href?: string }>;
+        if (conflicts.length > 0) {
+          metaBefore.push(`**Conflicts with ${conflicts.length} other link${conflicts.length === 1 ? '' : 's'} sharing the same text:**`);
+          bullets = conflicts.map((c) => {
+            const t = c.target ? `\`${truncate(c.target, 80)}\`` : '(unknown selector)';
+            const h = c.href ? ` → \`${truncate(c.href, 100)}\`` : '';
+            return `- ${t}${h}`;
+          });
+        }
+      }
+      if (!bullets && isMultiPage && item.affected_urls.length <= 8) {
         metaBefore.push('**Appears on:**');
         bullets = item.affected_urls.map((u) => `- ${u}`);
       }
@@ -562,15 +585,32 @@ function headlineFor(item: ActionItem): string {
   if (item.level === 'template') {
     return `Site-wide: ${humanType(item.finding_type)}`;
   }
-  // Multi-URL instance — same element on multiple pages, almost certainly
-  // a shared header/footer/template element. Frame it as such.
+  // For text-bearing finding types, quote the visible text so the headline
+  // disambiguates (e.g., five "Click here" findings each get their own row,
+  // and the dev can scan the list without opening every entry).
+  const textHint = item.current_value && QUOTED_HINT_TYPES.has(item.finding_type)
+    ? ` — "${truncate(item.current_value, 40)}"`
+    : '';
   if (item.affected_urls.length > 1) {
-    return `Shared template (${item.affected_urls.length} pages) — ${humanType(item.finding_type)}`;
+    return `${humanType(item.finding_type)}${textHint} (shared across ${item.affected_urls.length} pages)`;
   }
-  // Single-URL instance: include the page path so the dev can locate at a glance.
-  const path = friendlyPath(item.url ?? '');
-  return `${path} — ${humanType(item.finding_type)}`;
+  return `${humanType(item.finding_type)}${textHint}`;
 }
+
+// Finding types whose headline benefits from a quoted snippet of the visible
+// text. For these, current_value is a clean text string (not HTML markup), so
+// it reads well as a quote.
+const QUOTED_HINT_TYPES: ReadonlySet<string> = new Set([
+  'generic-link-text',
+  'poor-link-text',
+  'redundant-link-text',
+  'sensory-language-candidate',
+  'label-in-name-mismatch',
+  'no-h1',
+  'multiple-h1',
+  'empty-heading',
+  'skipped-heading-level',
+]);
 
 function humanType(type: string): string {
   const dictionary: Record<string, string> = {
@@ -637,6 +677,23 @@ function truncate(s: string, max: number): string {
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+// Link-text findings whose context.href reveals where the link points to.
+// Surfacing the destination tells the dev what to write the accessible name
+// about — guessing from a CSS selector is too abstract.
+const LINK_TEXT_TYPES: ReadonlySet<string> = new Set([
+  'empty-link',
+  'generic-link-text',
+  'poor-link-text',
+  'redundant-link-text',
+  'label-in-name-mismatch',
+]);
+
+function stringField(ctx: Record<string, unknown> | null | undefined, key: string): string | null {
+  if (!ctx) return null;
+  const v = ctx[key];
+  return typeof v === 'string' ? v : null;
 }
 
 /**
