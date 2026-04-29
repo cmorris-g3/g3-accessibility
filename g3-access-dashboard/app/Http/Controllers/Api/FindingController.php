@@ -28,7 +28,7 @@ class FindingController extends Controller
 
         if (! empty($validated['url'])) {
             $normalized = UrlNormalizer::normalize($validated['url']) ?? $validated['url'];
-            $query->where('url', $normalized);
+            $query->whereHas('occurrences', fn ($q) => $q->where('url', $normalized));
         }
 
         $status = $validated['status'] ?? 'open';

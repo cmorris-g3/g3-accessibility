@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Finding extends Model
 {
@@ -49,5 +50,15 @@ class Finding extends Model
     public function lastSeenScan(): BelongsTo
     {
         return $this->belongsTo(Scan::class, 'last_seen_scan_id');
+    }
+
+    /**
+     * Each URL on which this finding has been observed. The finding's own
+     * `url` field is the FIRST URL it was seen on (immutable after creation);
+     * occurrences track every URL where the same fingerprint surfaced.
+     */
+    public function occurrences(): HasMany
+    {
+        return $this->hasMany(FindingOccurrence::class);
     }
 }

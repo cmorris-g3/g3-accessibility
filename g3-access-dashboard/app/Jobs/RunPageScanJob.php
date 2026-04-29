@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\Finding;
+use App\Models\FindingOccurrence;
 use App\Models\License;
 use App\Models\Scan;
 use App\Services\ScannerException;
@@ -153,8 +154,10 @@ class RunPageScanJob implements ShouldQueue
                     ->where('fingerprint', $fp)
                     ->first();
 
+                // Mutable per-scan fields. Note `url` is intentionally NOT here:
+                // the finding's url is the first URL it was seen on (immutable);
+                // every URL it appears on is tracked via finding_occurrences below.
                 $common = [
-                    'url' => $normalizedUrl,
                     'wcag_rule' => $f['wcag'] ?? '',
                     'finding_type' => $f['finding_type'] ?? 'unknown',
                     'severity' => $f['severity'] ?? 'moderate',
@@ -167,33 +170,64 @@ class RunPageScanJob implements ShouldQueue
                 ];
 
                 if (! $existing) {
-                    Finding::create(array_merge($common, [
+                    $finding = Finding::create(array_merge($common, [
                         'license_id' => $scan->license_id,
                         'fingerprint' => $fp,
+                        'url' => $normalizedUrl,
                         'first_seen_scan_id' => $scan->id,
                         'status' => 'open',
                     ]));
-                    continue;
+                } else {
+                    if ($existing->status === 'resolved') {
+                        $existing->fill($common);
+                        $existing->status = 'regressed';
+                        $existing->resolved_at = null;
+                        $existing->save();
+                    } else {
+                        $existing->fill($common)->save();
+                    }
+                    $finding = $existing;
                 }
 
-                if ($existing->status === 'resolved') {
-                    $existing->fill($common);
-                    $existing->status = 'regressed';
-                    $existing->resolved_at = null;
-                    $existing->save();
-                } else {
-                    $existing->fill($common)->save();
+                // Upsert the occurrence row for (finding, this URL).
+                // Tracks first/last scan that saw this fingerprint at this URL.
+                $occurrence = FindingOccurrence::firstOrNew([
+                    'finding_id' => $finding->id,
+                    'url' => $normalizedUrl,
+                ]);
+                if (! $occurrence->exists) {
+                    $occurrence->first_seen_scan_id = $scan->id;
                 }
+                $occurrence->last_seen_scan_id = $scan->id;
+                $occurrence->save();
             }
 
-            Finding::where('license_id', $scan->license_id)
+            // Resolve-stale: occurrences on this URL whose finding's fingerprint
+            // wasn't seen this scan. Delete the occurrence (this URL no longer
+            // surfaces this finding). Then for any finding that no longer has
+            // ANY occurrences anywhere, mark the finding itself resolved.
+            $staleFindingIds = FindingOccurrence::query()
                 ->where('url', $normalizedUrl)
-                ->whereIn('status', ['open', 'regressed'])
-                ->when(count($seenFingerprints) > 0, fn ($q) => $q->whereNotIn('fingerprint', $seenFingerprints))
-                ->update([
-                    'status' => 'resolved',
-                    'resolved_at' => now(),
-                ]);
+                ->whereHas('finding', function ($q) use ($scan, $seenFingerprints) {
+                    $q->where('license_id', $scan->license_id)
+                        ->whereIn('status', ['open', 'regressed'])
+                        ->when(count($seenFingerprints) > 0, fn ($qq) => $qq->whereNotIn('fingerprint', $seenFingerprints));
+                })
+                ->pluck('finding_id');
+
+            if ($staleFindingIds->isNotEmpty()) {
+                FindingOccurrence::where('url', $normalizedUrl)
+                    ->whereIn('finding_id', $staleFindingIds)
+                    ->delete();
+
+                Finding::whereIn('id', $staleFindingIds)
+                    ->whereIn('status', ['open', 'regressed'])
+                    ->whereDoesntHave('occurrences')
+                    ->update([
+                        'status' => 'resolved',
+                        'resolved_at' => now(),
+                    ]);
+            }
         });
     }
 

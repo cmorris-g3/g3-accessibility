@@ -51,9 +51,9 @@ class Index extends Component
             ->when($this->license !== '', fn ($q) => $q->where('license_id', (int) $this->license))
             ->when($this->status !== '' && $this->status !== 'all', fn ($q) => $q->where('status', $this->status))
             ->when($this->severity !== '', fn ($q) => $q->where('severity', $this->severity))
-            ->when($this->url !== '', fn ($q) => $q->where('url', $this->url))
+            ->when($this->url !== '', fn ($q) => $q->whereHas('occurrences', fn ($qq) => $qq->where('url', $this->url)))
             ->when($this->search !== '', fn ($q) => $q->where(function ($q) {
-                $q->where('url', 'like', '%'.$this->search.'%')
+                $q->whereHas('occurrences', fn ($qq) => $qq->where('url', 'like', '%'.$this->search.'%'))
                   ->orWhere('finding_type', 'like', '%'.$this->search.'%')
                   ->orWhere('rationale', 'like', '%'.$this->search.'%');
             }))

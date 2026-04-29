@@ -103,7 +103,7 @@ class Show extends Component
                 ->map(function ($group) use ($licenseId) {
                     $latest = $group->first();
                     $openCounts = Finding::where('license_id', $licenseId)
-                        ->where('url', $latest->url)
+                        ->whereHas('occurrences', fn ($q) => $q->where('url', $latest->url))
                         ->where('status', 'open')
                         ->selectRaw('severity, count(*) as c')
                         ->groupBy('severity')
@@ -131,15 +131,15 @@ class Show extends Component
         /** @var LengthAwarePaginator $findings */
         $findings = Finding::query()
             ->where('license_id', $licenseId)
-            ->when(count($scopeUrls) > 0, fn ($q) => $q->whereIn('url', $scopeUrls))
+            ->when(count($scopeUrls) > 0, fn ($q) => $q->whereHas('occurrences', fn ($qq) => $qq->whereIn('url', $scopeUrls)))
             ->when($this->status !== '' && $this->status !== 'all', fn ($q) => $q->where('status', $this->status))
             ->when($this->severity !== '', fn ($q) => $q->where('severity', $this->severity))
-            ->when($this->url !== '', fn ($q) => $q->where('url', $this->url))
+            ->when($this->url !== '', fn ($q) => $q->whereHas('occurrences', fn ($qq) => $qq->where('url', $this->url)))
             ->orderByDesc('updated_at')
             ->paginate(50);
 
         $summary = Finding::where('license_id', $licenseId)
-            ->when(count($scopeUrls) > 0, fn ($q) => $q->whereIn('url', $scopeUrls))
+            ->when(count($scopeUrls) > 0, fn ($q) => $q->whereHas('occurrences', fn ($qq) => $qq->whereIn('url', $scopeUrls)))
             ->selectRaw('status, count(*) as c')
             ->groupBy('status')
             ->pluck('c', 'status');

@@ -6,6 +6,7 @@ use App\Models\Finding;
 use App\Models\Scan;
 use App\Services\ScannerException;
 use App\Services\ScannerRunner;
+use App\Models\FindingOccurrence;
 use App\Support\UrlNormalizer;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable as QueueableTrait;
@@ -141,8 +142,9 @@ class RunConsistencyPassJob implements ShouldQueue
                 $url = UrlNormalizer::normalize($f['url'] ?? '') ?? ($f['url'] ?? '');
                 $seenByUrl[$url][] = $fp;
 
+                // url is excluded from $common — it's set only on Finding insert
+                // (first-seen URL). Per-URL presence is tracked via occurrences.
                 $common = [
-                    'url' => $url,
                     'wcag_rule' => $f['wcag'] ?? '',
                     'finding_type' => $f['finding_type'] ?? 'unknown',
                     'severity' => $f['severity'] ?? 'moderate',
@@ -159,25 +161,40 @@ class RunConsistencyPassJob implements ShouldQueue
                     ->first();
 
                 if (! $existing) {
-                    Finding::create(array_merge($common, [
+                    $finding = Finding::create(array_merge($common, [
                         'license_id' => $licenseId,
                         'fingerprint' => $fp,
+                        'url' => $url,
                         'first_seen_scan_id' => $parent->id,
                         'status' => 'open',
                     ]));
-                } elseif ($existing->status === 'resolved') {
-                    $existing->fill($common);
-                    $existing->status = 'regressed';
-                    $existing->resolved_at = null;
-                    $existing->save();
                 } else {
-                    $existing->fill($common)->save();
+                    if ($existing->status === 'resolved') {
+                        $existing->fill($common);
+                        $existing->status = 'regressed';
+                        $existing->resolved_at = null;
+                        $existing->save();
+                    } else {
+                        $existing->fill($common)->save();
+                    }
+                    $finding = $existing;
                 }
+
+                $occurrence = FindingOccurrence::firstOrNew([
+                    'finding_id' => $finding->id,
+                    'url' => $url,
+                ]);
+                if (! $occurrence->exists) {
+                    $occurrence->first_seen_scan_id = $parent->id;
+                }
+                $occurrence->last_seen_scan_id = $parent->id;
+                $occurrence->save();
             }
         });
 
         // Reconcile: for every URL included in this full scan, any open/regressed
-        // consistency finding not present in the new set is marked resolved.
+        // consistency finding not present in the new set has its occurrence on
+        // that URL removed, and is marked fully resolved if no occurrences remain.
         $scopeUrls = $children
             ->pluck('url')
             ->map(fn ($u) => UrlNormalizer::normalize($u) ?? $u)
@@ -187,14 +204,26 @@ class RunConsistencyPassJob implements ShouldQueue
 
         foreach ($scopeUrls as $url) {
             $fpsSeen = $seenByUrl[$url] ?? [];
-            $query = Finding::where('license_id', $licenseId)
+            $staleFindingIds = FindingOccurrence::query()
                 ->where('url', $url)
-                ->whereIn('finding_type', self::CONSISTENCY_TYPES)
-                ->whereIn('status', ['open', 'regressed']);
-            if (count($fpsSeen) > 0) {
-                $query->whereNotIn('fingerprint', $fpsSeen);
+                ->whereHas('finding', function ($q) use ($licenseId, $fpsSeen) {
+                    $q->where('license_id', $licenseId)
+                        ->whereIn('finding_type', self::CONSISTENCY_TYPES)
+                        ->whereIn('status', ['open', 'regressed'])
+                        ->when(count($fpsSeen) > 0, fn ($qq) => $qq->whereNotIn('fingerprint', $fpsSeen));
+                })
+                ->pluck('finding_id');
+
+            if ($staleFindingIds->isNotEmpty()) {
+                FindingOccurrence::where('url', $url)
+                    ->whereIn('finding_id', $staleFindingIds)
+                    ->delete();
+
+                Finding::whereIn('id', $staleFindingIds)
+                    ->whereIn('status', ['open', 'regressed'])
+                    ->whereDoesntHave('occurrences')
+                    ->update(['status' => 'resolved', 'resolved_at' => now()]);
             }
-            $query->update(['status' => 'resolved', 'resolved_at' => now()]);
         }
 
         // Fold consistency findings into the parent's total.
