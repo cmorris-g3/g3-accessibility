@@ -352,34 +352,51 @@ export function selectActionItems(findings: Finding[], totalPages: number): Acti
         score,
       });
     } else {
-      // Instance level — each finding is its own candidate.
+      // Instance level — group by (selector + current_value) so the SAME
+      // element surfacing in a shared header/footer across many pages emits
+      // a single task ("fix this image once in your CMS, propagates to all
+      // pages") instead of one per URL. Different selectors or different
+      // content (e.g., genuinely distinct images) remain as separate tasks.
       const time = INSTANCE_TIME[type];
       if (time === undefined || time === 0) continue;
 
+      const byElement = new Map<string, Finding[]>();
       for (const f of group) {
-        const sevImpact = SEVERITY_IMPACT[f.severity];
+        const key = `${f.target ?? ''}|${f.current_value ?? ''}`;
+        if (!byElement.has(key)) byElement.set(key, []);
+        byElement.get(key)!.push(f);
+      }
+
+      for (const fpGroup of byElement.values()) {
+        const sample = fpGroup[0];
+        const uniqueUrls = [...new Set(fpGroup.map((f) => f.url))].sort();
+        const pagesAffected = uniqueUrls.length;
+        const sevImpact = SEVERITY_IMPACT[sample.severity];
         const taskBlocking = TASK_BLOCKING.has(type) ? 1.5 : 1;
-        // Instance reach is always 1, but a finding that surfaces at the same
-        // selector across many URLs (e.g., a header link) is implicitly
-        // template-level. Keep this as instance for now; the per-page edit is
-        // still discrete (e.g., the CMS edit per page).
-        const impact = sevImpact * taskBlocking;
+        // When the same instance surfaces on many pages, reach matters even
+        // though the fix is still typically one CMS/template edit.
+        const reachRatio = totalPages > 0 ? Math.min(1, pagesAffected / totalPages) : 0;
+        const reachMultiplier = 1 + reachRatio;
+        const impact = sevImpact * taskBlocking * reachMultiplier;
         const score = (impact * visibility) / time;
 
         candidates.push({
           rank: 0,
           level: 'instance',
           finding_type: type,
-          severity: f.severity,
-          url: f.url,
-          selector: f.target ?? null,
-          current_value: f.current_value ?? null,
-          guidance: f.suggested_fix?.trim() || INSTANCE_GUIDANCE[type] || 'Review the flagged element and apply the WCAG-aligned fix.',
-          wcag_refs: f.wcag ? [f.wcag] : [],
-          pages_affected: 1,
-          covers_findings: 1,
+          severity: sample.severity,
+          // For single-URL groups, url is the page; for multi-URL groups,
+          // we keep the first URL as a "primary" and surface the rest via
+          // affected_urls in rendering.
+          url: sample.url,
+          selector: sample.target ?? null,
+          current_value: sample.current_value ?? null,
+          guidance: sample.suggested_fix?.trim() || INSTANCE_GUIDANCE[type] || 'Review the flagged element and apply the WCAG-aligned fix.',
+          wcag_refs: [...new Set(fpGroup.map((f) => f.wcag).filter(Boolean))].sort(),
+          pages_affected: pagesAffected,
+          covers_findings: fpGroup.length,
           time_minutes: time,
-          affected_urls: [f.url],
+          affected_urls: uniqueUrls,
           score,
         });
       }
@@ -482,7 +499,12 @@ export function renderActionItems(items: ActionItem[], manifest: Manifest): stri
     let bullets: string[] | null = null;
 
     if (item.level === 'instance') {
-      metaBefore.push(`**Page:** ${item.url}`);
+      const isMultiPage = item.affected_urls.length > 1;
+      if (isMultiPage) {
+        metaBefore.push(`**Pages affected:** ${item.affected_urls.length} of ${manifest.urls.length} (shared element — fix once in the template/CMS).`);
+      } else {
+        metaBefore.push(`**Page:** ${item.url}`);
+      }
       if (item.selector) {
         metaBefore.push(`**Element:** \`${item.selector}\``);
       }
@@ -496,6 +518,10 @@ export function renderActionItems(items: ActionItem[], manifest: Manifest): stri
         if (src) {
           metaBefore.push(`**Image URL:** [${src}](${src})`);
         }
+      }
+      if (isMultiPage && item.affected_urls.length <= 8) {
+        metaBefore.push('**Appears on:**');
+        bullets = item.affected_urls.map((u) => `- ${u}`);
       }
     } else {
       metaBefore.push(`**Scope:** site-wide CSS / template change.`);
@@ -536,7 +562,12 @@ function headlineFor(item: ActionItem): string {
   if (item.level === 'template') {
     return `Site-wide: ${humanType(item.finding_type)}`;
   }
-  // Instance: include the page path so the agency dev can locate at a glance.
+  // Multi-URL instance — same element on multiple pages, almost certainly
+  // a shared header/footer/template element. Frame it as such.
+  if (item.affected_urls.length > 1) {
+    return `Shared template (${item.affected_urls.length} pages) — ${humanType(item.finding_type)}`;
+  }
+  // Single-URL instance: include the page path so the dev can locate at a glance.
   const path = friendlyPath(item.url ?? '');
   return `${path} — ${humanType(item.finding_type)}`;
 }

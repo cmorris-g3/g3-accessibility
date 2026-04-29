@@ -38,11 +38,11 @@ function makeFinding(opts: {
 // Tests
 // ---------------------------------------------------------------------------
 
-test('instance findings emit one task per finding', () => {
+test('instance findings with distinct (selector, content) emit one task each', () => {
   const findings = [
-    makeFinding({ finding_type: 'missing-alt', url: 'https://x.test/a' }),
-    makeFinding({ finding_type: 'missing-alt', url: 'https://x.test/b' }),
-    makeFinding({ finding_type: 'missing-alt', url: 'https://x.test/c' }),
+    makeFinding({ finding_type: 'missing-alt', url: 'https://x.test/a', target: 'main > img:nth-child(1)', current_value: '<img src="a.png">' }),
+    makeFinding({ finding_type: 'missing-alt', url: 'https://x.test/b', target: 'main > img:nth-child(2)', current_value: '<img src="b.png">' }),
+    makeFinding({ finding_type: 'missing-alt', url: 'https://x.test/c', target: 'main > img:nth-child(3)', current_value: '<img src="c.png">' }),
   ];
 
   const items = selectActionItems(findings, 3);
@@ -52,9 +52,28 @@ test('instance findings emit one task per finding', () => {
     assert.equal(item.covers_findings, 1);
     assert.equal(item.pages_affected, 1);
   }
-  // Each must reference its specific URL.
   const urls = items.map((i) => i.url);
   assert.deepEqual(urls.sort(), ['https://x.test/a', 'https://x.test/b', 'https://x.test/c']);
+});
+
+test('instance findings with same (selector, content) across pages collapse to one task', () => {
+  // The exact pattern that bit the user — same masthead logo (same selector,
+  // same img src in current_value) showing up on every page.
+  const sharedSelector = 'header > .logo > a';
+  const sharedHtml = '<a href="/"><img alt="" src="https://cdn.test/logo.png"></a>';
+  const findings = [
+    makeFinding({ finding_type: 'miscategorized-decorative', url: 'https://x.test/', target: sharedSelector, current_value: sharedHtml }),
+    makeFinding({ finding_type: 'miscategorized-decorative', url: 'https://x.test/about', target: sharedSelector, current_value: sharedHtml }),
+    makeFinding({ finding_type: 'miscategorized-decorative', url: 'https://x.test/services', target: sharedSelector, current_value: sharedHtml }),
+    makeFinding({ finding_type: 'miscategorized-decorative', url: 'https://x.test/contact', target: sharedSelector, current_value: sharedHtml }),
+  ];
+
+  const items = selectActionItems(findings, 4);
+  assert.equal(items.length, 1, 'should collapse 4 findings to one task');
+  assert.equal(items[0].level, 'instance');
+  assert.equal(items[0].pages_affected, 4);
+  assert.equal(items[0].covers_findings, 4);
+  assert.equal(items[0].affected_urls.length, 4);
 });
 
 test('template finding type emits one task covering all instances', () => {
@@ -77,10 +96,10 @@ test('template finding type emits one task covering all instances', () => {
 
 test('mixed instance + template tasks coexist in one selection', () => {
   const findings = [
-    // 3 missing-alt findings (instance) → 3 tasks
-    makeFinding({ finding_type: 'missing-alt', url: 'https://x.test/a' }),
-    makeFinding({ finding_type: 'missing-alt', url: 'https://x.test/b' }),
-    makeFinding({ finding_type: 'missing-alt', url: 'https://x.test/c' }),
+    // 3 missing-alt findings on DIFFERENT elements → 3 instance tasks
+    makeFinding({ finding_type: 'missing-alt', url: 'https://x.test/a', target: 'main img:nth-child(1)', current_value: '<img src="a.png">' }),
+    makeFinding({ finding_type: 'missing-alt', url: 'https://x.test/b', target: 'main img:nth-child(2)', current_value: '<img src="b.png">' }),
+    makeFinding({ finding_type: 'missing-alt', url: 'https://x.test/c', target: 'main img:nth-child(3)', current_value: '<img src="c.png">' }),
     // 5 no-focus-indicator findings (template) → 1 task
     makeFinding({ finding_type: 'no-focus-indicator', url: 'https://x.test/a' }),
     makeFinding({ finding_type: 'no-focus-indicator', url: 'https://x.test/b' }),
@@ -157,11 +176,14 @@ test('soft cap — does not select more than 50 items even with budget left', ()
 });
 
 test('no item count cap below 50 — drops the previous max-10 limit', () => {
-  // 30 different missing-alt tasks, each 5 min = 150 min total → all should fit.
+  // 30 distinct missing-alt tasks (different elements + content per page),
+  // each 5 min = 150 min total → all should fit, none dedup.
   const findings = Array.from({ length: 30 }, (_, i) =>
     makeFinding({
       finding_type: 'missing-alt',
       url: `https://x.test/${i}`,
+      target: `main > img:nth-child(${i + 1})`,
+      current_value: `<img src="img-${i}.png">`,
     }),
   );
 
