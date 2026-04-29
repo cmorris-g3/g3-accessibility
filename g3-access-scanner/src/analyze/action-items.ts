@@ -446,29 +446,51 @@ export function renderActionItems(items: ActionItem[], manifest: Manifest): stri
     lines.push(item.guidance);
     lines.push('');
 
+    // Build the metadata block. Each line gets a trailing two-space hard break
+    // so consecutive **Field:** lines render as a tight stack rather than one
+    // run-on paragraph. The bullet list (when present) is sandwiched in blank
+    // lines so the renderer doesn't fold the following metadata into the last
+    // bullet.
+    const metaBefore: string[] = [];
+    const metaAfter: string[] = [];
+    let bullets: string[] | null = null;
+
     if (item.level === 'instance') {
-      lines.push(`**Page:** ${item.url}`);
+      metaBefore.push(`**Page:** ${item.url}`);
       if (item.selector) {
-        lines.push(`**Element:** \`${item.selector}\``);
+        metaBefore.push(`**Element:** \`${item.selector}\``);
       }
       if (item.current_value) {
-        lines.push(`**Currently:** \`${truncate(item.current_value, 200)}\``);
+        metaBefore.push(`**Currently:** \`${truncate(item.current_value, 200)}\``);
       }
     } else {
-      lines.push(`**Scope:** site-wide CSS / template change.`);
-      lines.push(`**Affects:** ${item.covers_findings} finding${item.covers_findings === 1 ? '' : 's'} across ${item.pages_affected} of ${manifest.urls.length} page${manifest.urls.length === 1 ? '' : 's'} reviewed.`);
+      metaBefore.push(`**Scope:** site-wide CSS / template change.`);
+      metaBefore.push(`**Affects:** ${item.covers_findings} finding${item.covers_findings === 1 ? '' : 's'} across ${item.pages_affected} of ${manifest.urls.length} page${manifest.urls.length === 1 ? '' : 's'} reviewed.`);
       if (item.affected_urls.length > 0 && item.affected_urls.length <= 8) {
-        lines.push('**On these pages:**');
-        for (const u of item.affected_urls) {
-          lines.push(`- ${u}`);
-        }
+        metaBefore.push('**On these pages:**');
+        bullets = item.affected_urls.map((u) => `- ${u}`);
       }
     }
 
     if (item.wcag_refs.length > 0) {
-      lines.push(`**WCAG:** ${item.wcag_refs.join(', ')}`);
+      metaAfter.push(`**WCAG:** ${item.wcag_refs.join(', ')}`);
     }
-    lines.push(`**Severity:** ${capitalize(item.severity)}`);
+    metaAfter.push(`**Severity:** ${capitalize(item.severity)}`);
+
+    // Trailing hard break on every line except the last in each block.
+    for (let i = 0; i < metaBefore.length; i++) {
+      const isLastBeforeBullets = bullets && i === metaBefore.length - 1;
+      lines.push(metaBefore[i] + (isLastBeforeBullets ? '' : '  '));
+    }
+    if (bullets) {
+      lines.push(''); // blank line before the list
+      for (const b of bullets) lines.push(b);
+      lines.push(''); // blank line after the list — keeps next block separate
+    }
+    for (let i = 0; i < metaAfter.length; i++) {
+      const isLast = i === metaAfter.length - 1;
+      lines.push(metaAfter[i] + (isLast ? '' : '  '));
+    }
     lines.push('');
   }
 
