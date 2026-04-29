@@ -10,8 +10,20 @@ class UrlNormalizer
         if (! $parts || ! isset($parts['scheme'], $parts['host'])) {
             return null;
         }
-        if (! in_array($parts['scheme'], ['http', 'https'], true)) {
+
+        $scheme = strtolower($parts['scheme']);
+        if (! in_array($scheme, ['http', 'https'], true)) {
             return null;
+        }
+
+        $host = strtolower($parts['host']);
+
+        $port = '';
+        if (isset($parts['port'])) {
+            $defaultPort = $scheme === 'http' ? 80 : 443;
+            if ((int) $parts['port'] !== $defaultPort) {
+                $port = ':'.$parts['port'];
+            }
         }
 
         $path = $parts['path'] ?? '/';
@@ -20,6 +32,8 @@ class UrlNormalizer
             $path = '/';
         }
 
-        return $parts['scheme'].'://'.$parts['host'].$path;
+        $query = isset($parts['query']) ? '?'.$parts['query'] : '';
+
+        return $scheme.'://'.$host.$port.$path.$query;
     }
 }
