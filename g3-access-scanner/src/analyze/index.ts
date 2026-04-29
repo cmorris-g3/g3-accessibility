@@ -29,6 +29,7 @@ import { renderVendorTasks } from './vendor-tasks.js';
 import { renderReviewerTasks } from './reviewer-tasks.js';
 import { attachFingerprints } from './fingerprint.js';
 import { selectActionItems, renderActionItems } from './action-items.js';
+import { slugifyUrl } from '../lib/fs.js';
 
 async function readJson<T>(path: string): Promise<T> {
   const raw = await readFile(path, 'utf8');
@@ -40,16 +41,6 @@ async function tryReadJson<T>(path: string): Promise<T | null> {
     return await readJson<T>(path);
   } catch {
     return null;
-  }
-}
-
-function slugifyUrl(url: string): string {
-  try {
-    const u = new URL(url);
-    const path = u.pathname === '/' ? 'home' : u.pathname.replace(/^\/|\/$/g, '').replace(/\//g, '-');
-    return path.replace(/[^a-z0-9-]/gi, '-').toLowerCase() || 'home';
-  } catch {
-    return 'unknown';
   }
 }
 
