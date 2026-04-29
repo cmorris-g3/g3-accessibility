@@ -255,7 +255,7 @@ test('extractImageSrc — returns null when no img tag', () => {
   assert.equal(extractImageSrc('<a>just a link</a>', 'https://x.test/'), null);
 });
 
-test('renderActionItems — embeds image markdown for image-finding types', () => {
+test('renderActionItems — emits image URL as clickable link for image-finding types', () => {
   const findings = [
     makeFinding({
       finding_type: 'missing-alt',
@@ -281,10 +281,14 @@ test('renderActionItems — embeds image markdown for image-finding types', () =
   };
 
   const md = renderActionItems(items, manifest);
-  assert.match(md, /!\[Flagged image\]\(https:\/\/cdn\.test\/logo\.png\)$/m, 'image embed should be present on its own line');
+  assert.match(
+    md,
+    /\*\*Image URL:\*\* \[https:\/\/cdn\.test\/logo\.png\]\(https:\/\/cdn\.test\/logo\.png\)/,
+    'image URL should be present as a markdown link',
+  );
 });
 
-test('renderActionItems — does NOT embed images for non-image finding types', () => {
+test('renderActionItems — does NOT emit Image URL for non-image finding types', () => {
   const findings = [
     makeFinding({
       finding_type: 'empty-link',
@@ -310,7 +314,7 @@ test('renderActionItems — does NOT embed images for non-image finding types', 
   };
 
   const md = renderActionItems(items, manifest);
-  assert.doesNotMatch(md, /!\[Flagged image\]/);
+  assert.doesNotMatch(md, /\*\*Image URL:\*\*/);
 });
 
 test('template items list affected URLs for traceability', () => {
