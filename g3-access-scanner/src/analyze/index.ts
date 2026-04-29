@@ -28,7 +28,7 @@ import { renderDesignerTasks } from './designer-tasks.js';
 import { renderVendorTasks } from './vendor-tasks.js';
 import { renderReviewerTasks } from './reviewer-tasks.js';
 import { attachFingerprints } from './fingerprint.js';
-import { selectTopTen, renderTopTen } from './top-ten.js';
+import { selectActionItems, renderActionItems } from './action-items.js';
 
 async function readJson<T>(path: string): Promise<T> {
   const raw = await readFile(path, 'utf8');
@@ -202,10 +202,11 @@ export async function analyze(runDir: string): Promise<void> {
   await writeFile(join(runDir, 'executive-summary.md'), execSummary, 'utf8');
   console.log(`[analyze] Wrote executive-summary.md`);
 
-  const topTenItems = selectTopTen(workItems, manifest.urls.length);
-  const topTen = renderTopTen(topTenItems, manifest);
-  await writeFile(join(runDir, 'top-10.md'), topTen, 'utf8');
-  console.log(`[analyze] Wrote top-10.md (${topTenItems.length} items)`);
+  const actionItems = selectActionItems(kept, manifest.urls.length);
+  const actionItemsMd = renderActionItems(actionItems, manifest);
+  await writeFile(join(runDir, 'action-items.md'), actionItemsMd, 'utf8');
+  const totalMin = actionItems.reduce((s, i) => s + i.time_minutes, 0);
+  console.log(`[analyze] Wrote action-items.md (${actionItems.length} tasks, ${totalMin} min)`);
 
   const editor = renderEditorTasks(workItems, manifest);
   await writeFile(join(runDir, 'editor-tasks.md'), editor.markdown, 'utf8');

@@ -22,7 +22,7 @@ class ReportBuilder
 {
     /** Artifact files to carry into the zip (before the .md files become .docx). */
     private const KEEP_ARTIFACTS = [
-        'top-10.md',
+        'action-items.md',
         'executive-summary.md',
         'editor-tasks.md',
         'developer-tasks.md',
@@ -37,7 +37,7 @@ class ReportBuilder
 
     /** When a doc references another doc by filename, swap .md for .docx. */
     private const MD_TO_DOCX_REPLACEMENTS = [
-        'top-10.md' => 'top-10.docx',
+        'action-items.md' => 'action-items.docx',
         'editor-tasks.md' => 'editor-tasks.docx',
         'developer-tasks.md' => 'developer-tasks.docx',
         'designer-tasks.md' => 'designer-tasks.docx',
