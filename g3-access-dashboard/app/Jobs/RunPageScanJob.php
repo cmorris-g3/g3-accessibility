@@ -19,7 +19,12 @@ class RunPageScanJob implements ShouldQueue
 {
     use QueueableTrait;
 
-    public int $tries = 1;
+    // Up to 5 pickups before the queue gives up. Real scan failures are caught
+    // inside handle() and exit cleanly without re-queueing, so this budget is
+    // only consumed by $this->release() — the per-license concurrency cap. On
+    // a busy box this gives ~150s of release-cycle headroom (5 × 30s) before
+    // the job is escalated to failed_jobs and failed() runs.
+    public int $tries = 5;
 
     public function __construct(public int $scanId) {}
 
@@ -103,6 +108,29 @@ class RunPageScanJob implements ShouldQueue
                 'scan_id' => $scan->id,
                 'url' => $scan->url,
                 'error' => $e->getMessage(),
+            ]);
+            $this->bumpParent($scan, successful: false);
+        }
+    }
+
+    /**
+     * Called by Laravel when the job is given up after exhausting tries.
+     * Most commonly fires when the per-license concurrency cap stays hit
+     * across 5 release cycles. Mark the scan failed so it doesn't sit in
+     * 'queued' forever, and bump the parent so the full-scan progress
+     * counter advances.
+     */
+    public function failed(?Throwable $e): void
+    {
+        $scan = Scan::find($this->scanId);
+        if (! $scan) {
+            return;
+        }
+        if (in_array($scan->status, ['queued', 'running'], true)) {
+            $scan->update([
+                'status' => 'failed',
+                'completed_at' => now(),
+                'error' => 'Could not run within retry budget. Cause: '.($e?->getMessage() ?? 'unknown'),
             ]);
             $this->bumpParent($scan, successful: false);
         }
