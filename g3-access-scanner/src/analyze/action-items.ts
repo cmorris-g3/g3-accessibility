@@ -191,6 +191,18 @@ const TEMPLATE_TIME: Record<string, number> = {
   'inconsistent-navigation': 60,
 };
 
+// Finding types that are out of scope for the 3-hour agency engagement.
+// Reported in the audit but excluded from the action items list. Each
+// exclusion needs an explicit rationale below.
+const EXCLUDED_FROM_ACTION_ITEMS: ReadonlySet<string> = new Set([
+  // Text contrast: requires brand/design decisions the client has to make.
+  // Keep `non-text-contrast-below-aa` (UI borders/icons) since those tend
+  // to be developer-driven CSS tweaks.
+  'contrast-below-aa-normal',
+  'contrast-below-aa-large',
+  'contrast-below-aaa',
+]);
+
 const TASK_BLOCKING: ReadonlySet<string> = new Set([
   'empty-link',
   'keyboard-trap',
@@ -239,8 +251,8 @@ const TEMPLATE_GUIDANCE: Record<string, string> = {
   'contrast-below-aa-large': 'Update text/background color pairs for large text (18pt+ or 14pt+ bold) to meet 3:1 minimum.',
   'contrast-below-aaa': 'Optional: tighten contrast pairs to AAA threshold (7:1 normal, 4.5:1 large).',
   'non-text-contrast-below-aa': 'Update borders/icons/UI components to meet 3:1 contrast against adjacent colors.',
-  'target-below-24px': 'Add a CSS rule giving small interactive targets a minimum 24×24 pixel hit area: `a, button { min-width: 24px; min-height: 24px; padding: 4px 8px; }` (or scoped to your nav/footer link selectors).',
-  'target-below-44px': 'Optional: scale targets to 44×44 for AAA touch-friendliness.',
+  'target-below-24px': 'Scope the rule to the site header and footer only — avoid blanket changes that could affect inline content links elsewhere on the site. Add: `header a, header button, footer a, footer button { min-width: 24px; min-height: 24px; padding: 4px 8px; }` (adjust selectors to match your theme\'s actual header/footer markup).',
+  'target-below-44px': 'Optional: scale header/footer targets to 44×44 for AAA touch-friendliness. Same scoping principle — keep the rule out of inline content areas.',
   'text-spacing-not-responsive': 'Confirm content reflows correctly when users override line-height/letter-spacing. Usually resolved by removing fixed heights on text containers.',
   'text-spacing-content-loss': 'Content disappears or overlaps when text spacing is increased. Replace fixed heights with min-height or use overflow:visible on text containers.',
   'motion-ignores-reduce-preference': 'Add a global CSS rule: `@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }`',
@@ -290,6 +302,7 @@ export function selectActionItems(findings: Finding[], totalPages: number): Acti
   }
 
   for (const [type, group] of byType) {
+    if (EXCLUDED_FROM_ACTION_ITEMS.has(type)) continue;
     const level = FIX_LEVEL[type];
     if (!level) continue; // unmapped type — skip
     const visibility = VISIBILITY[type] ?? 1;

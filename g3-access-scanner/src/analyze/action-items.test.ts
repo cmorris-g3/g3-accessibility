@@ -57,21 +57,21 @@ test('instance findings emit one task per finding', () => {
 });
 
 test('template finding type emits one task covering all instances', () => {
-  // contrast-below-aa-normal is template-level. 8 findings → 1 task.
+  // no-focus-indicator is template-level. 8 findings → 1 task.
   const findings = Array.from({ length: 8 }, (_, i) =>
     makeFinding({
-      finding_type: 'contrast-below-aa-normal',
+      finding_type: 'no-focus-indicator',
       url: `https://x.test/${i % 4}`,
     }),
   );
 
   const items = selectActionItems(findings, 4);
-  const contrastTasks = items.filter((i) => i.finding_type === 'contrast-below-aa-normal');
-  assert.equal(contrastTasks.length, 1, 'one template task for the type');
-  assert.equal(contrastTasks[0].level, 'template');
-  assert.equal(contrastTasks[0].covers_findings, 8);
-  assert.equal(contrastTasks[0].pages_affected, 4);
-  assert.equal(contrastTasks[0].url, null, 'template tasks have no single URL');
+  const focusTasks = items.filter((i) => i.finding_type === 'no-focus-indicator');
+  assert.equal(focusTasks.length, 1, 'one template task for the type');
+  assert.equal(focusTasks[0].level, 'template');
+  assert.equal(focusTasks[0].covers_findings, 8);
+  assert.equal(focusTasks[0].pages_affected, 4);
+  assert.equal(focusTasks[0].url, null, 'template tasks have no single URL');
 });
 
 test('mixed instance + template tasks coexist in one selection', () => {
@@ -80,12 +80,12 @@ test('mixed instance + template tasks coexist in one selection', () => {
     makeFinding({ finding_type: 'missing-alt', url: 'https://x.test/a' }),
     makeFinding({ finding_type: 'missing-alt', url: 'https://x.test/b' }),
     makeFinding({ finding_type: 'missing-alt', url: 'https://x.test/c' }),
-    // 5 contrast findings (template) → 1 task
-    makeFinding({ finding_type: 'contrast-below-aa-normal', url: 'https://x.test/a' }),
-    makeFinding({ finding_type: 'contrast-below-aa-normal', url: 'https://x.test/b' }),
-    makeFinding({ finding_type: 'contrast-below-aa-normal', url: 'https://x.test/c' }),
-    makeFinding({ finding_type: 'contrast-below-aa-normal', url: 'https://x.test/d' }),
-    makeFinding({ finding_type: 'contrast-below-aa-normal', url: 'https://x.test/e' }),
+    // 5 no-focus-indicator findings (template) → 1 task
+    makeFinding({ finding_type: 'no-focus-indicator', url: 'https://x.test/a' }),
+    makeFinding({ finding_type: 'no-focus-indicator', url: 'https://x.test/b' }),
+    makeFinding({ finding_type: 'no-focus-indicator', url: 'https://x.test/c' }),
+    makeFinding({ finding_type: 'no-focus-indicator', url: 'https://x.test/d' }),
+    makeFinding({ finding_type: 'no-focus-indicator', url: 'https://x.test/e' }),
   ];
 
   const items = selectActionItems(findings, 5);
@@ -95,6 +95,35 @@ test('mixed instance + template tasks coexist in one selection', () => {
   assert.equal(instances.length, 3);
   assert.equal(templates.length, 1);
   assert.equal(templates[0].covers_findings, 5);
+});
+
+test('text contrast types are excluded — out of scope for the agency engagement', () => {
+  // All three text-contrast levels should be filtered out entirely.
+  const findings = [
+    makeFinding({ finding_type: 'contrast-below-aa-normal', url: 'https://x.test/a' }),
+    makeFinding({ finding_type: 'contrast-below-aa-large', url: 'https://x.test/b' }),
+    makeFinding({ finding_type: 'contrast-below-aaa', url: 'https://x.test/c' }),
+    // Sanity: a non-excluded item gets through so we know selection isn't broken.
+    makeFinding({ finding_type: 'missing-alt', url: 'https://x.test/d' }),
+  ];
+
+  const items = selectActionItems(findings, 4);
+  const types = items.map((i) => i.finding_type);
+
+  assert.ok(!types.includes('contrast-below-aa-normal'));
+  assert.ok(!types.includes('contrast-below-aa-large'));
+  assert.ok(!types.includes('contrast-below-aaa'));
+  assert.ok(types.includes('missing-alt'), 'non-excluded types still selected');
+});
+
+test('non-text contrast (UI elements) is NOT excluded', () => {
+  // non-text-contrast-below-aa covers borders/icons — agency dev can fix.
+  const findings = [
+    makeFinding({ finding_type: 'non-text-contrast-below-aa', url: 'https://x.test/a' }),
+  ];
+  const items = selectActionItems(findings, 1);
+  assert.equal(items.length, 1);
+  assert.equal(items[0].finding_type, 'non-text-contrast-below-aa');
 });
 
 test('budget invariant — total time never exceeds 180 minutes', () => {
