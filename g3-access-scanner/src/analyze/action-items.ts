@@ -216,6 +216,28 @@ const IMAGE_FINDING_TYPES: ReadonlySet<string> = new Set([
   'alt-describes-appearance',
 ]);
 
+// Finding types where the SAME (selector, current_value) on multiple pages
+// is almost certainly a shared chrome/template element — masthead logo,
+// nav social icons, footer links — and a single CMS or template edit fixes
+// every occurrence. Group those into one task.
+//
+// Other instance types (h1 hierarchy, page headings, form fields, body
+// content) are page-specific even when the selector and text happen to
+// match across pages. Coincidence is not "shared template." Each page
+// stays as its own task for these.
+const CROSS_PAGE_GROUPABLE: ReadonlySet<string> = new Set([
+  'missing-alt',
+  'poor-alt',
+  'redundant-alt',
+  'miscategorized-decorative',
+  'alt-describes-appearance',
+  'empty-link',
+  'generic-link-text',
+  'poor-link-text',
+  'redundant-link-text',
+  'label-in-name-mismatch',
+]);
+
 const TASK_BLOCKING: ReadonlySet<string> = new Set([
   'empty-link',
   'keyboard-trap',
@@ -354,17 +376,21 @@ export function selectActionItems(findings: Finding[], totalPages: number): Acti
         score,
       });
     } else {
-      // Instance level — group by (selector + current_value) so the SAME
-      // element surfacing in a shared header/footer across many pages emits
-      // a single task ("fix this image once in your CMS, propagates to all
-      // pages") instead of one per URL. Different selectors or different
-      // content (e.g., genuinely distinct images) remain as separate tasks.
+      // Instance level — group by (selector + current_value) ONLY for
+      // finding types where matching elements across pages plausibly mean
+      // shared chrome (logos, nav, footer). For page-specific types (h1
+      // structure, body content), keep each finding as its own task even
+      // when content happens to match — they're separate concerns on
+      // separate pages.
       const time = INSTANCE_TIME[type];
       if (time === undefined || time === 0) continue;
 
       const byElement = new Map<string, Finding[]>();
+      const groupable = CROSS_PAGE_GROUPABLE.has(type);
       for (const f of group) {
-        const key = `${f.target ?? ''}|${f.current_value ?? ''}`;
+        const key = groupable
+          ? `${f.target ?? ''}|${f.current_value ?? ''}`
+          : `__nogroup__${candidates.length}__${f.url}__${f.target ?? ''}`;
         if (!byElement.has(key)) byElement.set(key, []);
         byElement.get(key)!.push(f);
       }
@@ -492,89 +518,90 @@ export function renderActionItems(items: ActionItem[], manifest: Manifest): stri
     lines.push(item.guidance);
     lines.push('');
 
-    // Build the metadata block. Each line gets a trailing two-space hard break
-    // so consecutive **Field:** lines render as a tight stack rather than one
-    // run-on paragraph. The bullet list (when present) is sandwiched in blank
-    // lines so the renderer doesn't fold the following metadata into the last
-    // bullet.
-    const metaBefore: string[] = [];
-    const metaAfter: string[] = [];
-    let bullets: string[] | null = null;
+    // The body is a sequence of chunks — each is either a metadata line
+    // (rendered as `text  ` with a two-space hard break so consecutive
+    // **Field:** lines stack tight) or a bullet block (heading line +
+    // bullets, sandwiched in blank lines so the next chunk isn't absorbed
+    // by GFM list-continuation rules).
+    type Chunk = { kind: 'meta'; text: string } | { kind: 'bullets'; heading: string; items: string[] };
+    const chunks: Chunk[] = [];
+    const meta = (text: string) => chunks.push({ kind: 'meta', text });
+    const bulletList = (heading: string, items: string[]) => chunks.push({ kind: 'bullets', heading, items });
 
     if (item.level === 'instance') {
       const isMultiPage = item.affected_urls.length > 1;
       if (isMultiPage) {
-        metaBefore.push(`**Pages affected:** ${item.affected_urls.length} of ${manifest.urls.length} (shared element — fix once in the template/CMS).`);
+        meta(`**Pages affected:** ${item.affected_urls.length} of ${manifest.urls.length} (shared element — fix once in the template/CMS).`);
       } else {
-        metaBefore.push(`**Page:** ${item.url}`);
+        meta(`**Page:** ${item.url}`);
       }
       if (item.current_value) {
-        metaBefore.push(`**Currently:** \`${truncate(item.current_value, 200)}\``);
+        meta(`**Currently:** \`${truncate(item.current_value, 200)}\``);
       }
-      // Surface link destination for link-text findings — the dev needs to
-      // know where the link points to write a meaningful accessible name.
       const href = stringField(item.context, 'href');
       if (href && LINK_TEXT_TYPES.has(item.finding_type)) {
-        metaBefore.push(`**Destination:** \`${truncate(href, 150)}\``);
+        meta(`**Destination:** \`${truncate(href, 150)}\``);
       }
-      // For image-related findings, surface the image URL as a clickable link
-      // so the dev can open it in a browser to see what they're addressing.
       if (IMAGE_FINDING_TYPES.has(item.finding_type) && item.current_value) {
         const src = extractImageSrc(item.current_value, item.url ?? '');
         if (src) {
-          metaBefore.push(`**Image URL:** [${src}](${src})`);
+          meta(`**Image URL:** [${src}](${src})`);
         }
       }
-      // For redundant-link-text, list the conflicting links (same visible
-      // text, different destinations) by destination URL so the dev can find
-      // each duplicate without having to read CSS selectors. The user can
-      // open each destination in a browser to locate the link.
+      // Conflicts list (redundant-link-text only) and the affected-pages list
+      // are independent — both can render. Conflicts come first because they
+      // describe the issue itself (which other links share the text);
+      // affected pages describe where the dev needs to look.
       if (item.finding_type === 'redundant-link-text' && Array.isArray(item.context?.conflicts)) {
         const conflicts = item.context!.conflicts as Array<{ target?: string; href?: string }>;
         const dests = conflicts
           .map((c) => (typeof c.href === 'string' ? c.href : null))
           .filter((h): h is string => !!h);
         if (dests.length > 0) {
-          metaBefore.push(`**Conflicts with ${dests.length} other link${dests.length === 1 ? '' : 's'} on this page sharing the same text — destinations:**`);
-          bullets = capUrlList(dests);
+          bulletList(
+            `**Conflicts with ${dests.length} other link${dests.length === 1 ? '' : 's'} on this page sharing the same text — destinations:**`,
+            capUrlList(dests),
+          );
         }
       }
-      if (!bullets && isMultiPage) {
-        metaBefore.push('**Appears on:**');
-        bullets = capUrlList(item.affected_urls);
+      if (isMultiPage) {
+        bulletList('**Appears on:**', capUrlList(item.affected_urls));
       }
     } else {
-      metaBefore.push(`**Scope:** site-wide CSS / template change.`);
-      metaBefore.push(`**Affects:** ${item.covers_findings} finding${item.covers_findings === 1 ? '' : 's'} across ${item.pages_affected} of ${manifest.urls.length} page${manifest.urls.length === 1 ? '' : 's'} reviewed.`);
+      meta(`**Scope:** site-wide CSS / template change.`);
+      meta(`**Affects:** ${item.covers_findings} finding${item.covers_findings === 1 ? '' : 's'} across ${item.pages_affected} of ${manifest.urls.length} page${manifest.urls.length === 1 ? '' : 's'} reviewed.`);
       if (item.affected_urls.length > 0) {
-        metaBefore.push('**On these pages:**');
-        bullets = capUrlList(item.affected_urls);
+        bulletList('**On these pages:**', capUrlList(item.affected_urls));
       }
     }
 
     if (item.wcag_refs.length > 0) {
-      metaAfter.push(`**WCAG:** ${item.wcag_refs.join(', ')}`);
+      meta(`**WCAG:** ${item.wcag_refs.join(', ')}`);
     }
-    metaAfter.push(`**Severity:** ${capitalize(item.severity)}`);
+    meta(`**Severity:** ${capitalize(item.severity)}`);
 
-    // Trailing hard break on every line except the last in each block.
-    for (let i = 0; i < metaBefore.length; i++) {
-      const isLastBeforeBullets = bullets && i === metaBefore.length - 1;
-      lines.push(metaBefore[i] + (isLastBeforeBullets ? '' : '  '));
-    }
-    if (bullets) {
-      lines.push(''); // blank line before the list
-      for (const b of bullets) lines.push(b);
-      lines.push(''); // blank line after the list — keeps next block separate
-    }
-    for (let i = 0; i < metaAfter.length; i++) {
-      const isLast = i === metaAfter.length - 1;
-      lines.push(metaAfter[i] + (isLast ? '' : '  '));
+    // Render chunks. Meta-to-meta uses two-space hard breaks so consecutive
+    // **Field:** lines stack as one paragraph. Bullet blocks are always
+    // sandwiched in blank lines — both above (so the heading isn't folded
+    // into the previous meta paragraph) and below (so the next chunk isn't
+    // absorbed by GFM list-continuation).
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      const next = chunks[i + 1];
+      if (chunk.kind === 'meta') {
+        const useHardBreak = next && next.kind === 'meta';
+        lines.push(chunk.text + (useHardBreak ? '  ' : ''));
+      } else {
+        lines.push('');
+        lines.push(chunk.heading);
+        lines.push('');
+        for (const b of chunk.items) lines.push(b);
+        lines.push('');
+      }
     }
 
-    // Horizontal rule between items for visual breathing room — single blank
-    // lines feel crammed in the docx output. Skipped after the last item so
-    // the doc doesn't end on a stray rule.
+    // Horizontal rule between items for visual breathing room. Skipped after
+    // the last item so the doc doesn't end on a stray rule.
     lines.push('');
     if (item.rank < items.length) {
       lines.push('---');
