@@ -508,9 +508,6 @@ export function renderActionItems(items: ActionItem[], manifest: Manifest): stri
       } else {
         metaBefore.push(`**Page:** ${item.url}`);
       }
-      if (item.selector) {
-        metaBefore.push(`**Element:** \`${item.selector}\``);
-      }
       if (item.current_value) {
         metaBefore.push(`**Currently:** \`${truncate(item.current_value, 200)}\``);
       }
@@ -529,29 +526,29 @@ export function renderActionItems(items: ActionItem[], manifest: Manifest): stri
         }
       }
       // For redundant-link-text, list the conflicting links (same visible
-      // text, different destinations) so the dev can see ALL the duplicates
-      // at once and add disambiguating context to each.
+      // text, different destinations) by destination URL so the dev can find
+      // each duplicate without having to read CSS selectors. The user can
+      // open each destination in a browser to locate the link.
       if (item.finding_type === 'redundant-link-text' && Array.isArray(item.context?.conflicts)) {
         const conflicts = item.context!.conflicts as Array<{ target?: string; href?: string }>;
-        if (conflicts.length > 0) {
-          metaBefore.push(`**Conflicts with ${conflicts.length} other link${conflicts.length === 1 ? '' : 's'} sharing the same text:**`);
-          bullets = conflicts.map((c) => {
-            const t = c.target ? `\`${truncate(c.target, 80)}\`` : '(unknown selector)';
-            const h = c.href ? ` → \`${truncate(c.href, 100)}\`` : '';
-            return `- ${t}${h}`;
-          });
+        const dests = conflicts
+          .map((c) => (typeof c.href === 'string' ? c.href : null))
+          .filter((h): h is string => !!h);
+        if (dests.length > 0) {
+          metaBefore.push(`**Conflicts with ${dests.length} other link${dests.length === 1 ? '' : 's'} on this page sharing the same text — destinations:**`);
+          bullets = capUrlList(dests);
         }
       }
-      if (!bullets && isMultiPage && item.affected_urls.length <= 8) {
+      if (!bullets && isMultiPage) {
         metaBefore.push('**Appears on:**');
-        bullets = item.affected_urls.map((u) => `- ${u}`);
+        bullets = capUrlList(item.affected_urls);
       }
     } else {
       metaBefore.push(`**Scope:** site-wide CSS / template change.`);
       metaBefore.push(`**Affects:** ${item.covers_findings} finding${item.covers_findings === 1 ? '' : 's'} across ${item.pages_affected} of ${manifest.urls.length} page${manifest.urls.length === 1 ? '' : 's'} reviewed.`);
-      if (item.affected_urls.length > 0 && item.affected_urls.length <= 8) {
+      if (item.affected_urls.length > 0) {
         metaBefore.push('**On these pages:**');
-        bullets = item.affected_urls.map((u) => `- ${u}`);
+        bullets = capUrlList(item.affected_urls);
       }
     }
 
@@ -694,6 +691,21 @@ function stringField(ctx: Record<string, unknown> | null | undefined, key: strin
   if (!ctx) return null;
   const v = ctx[key];
   return typeof v === 'string' ? v : null;
+}
+
+// Cap displayed URL/destination lists at 5 for readability — agency devs
+// only need a handful to spot-check, and longer lists turn the doc into a
+// wall. When more than 5 exist, suffix with an "and N more" hint so the
+// reader knows the total count.
+const URL_BULLET_CAP = 5;
+
+function capUrlList(urls: string[]): string[] {
+  const shown = urls.slice(0, URL_BULLET_CAP).map((u) => `- ${u}`);
+  const remaining = urls.length - URL_BULLET_CAP;
+  if (remaining > 0) {
+    shown.push(`- _…and ${remaining} more_`);
+  }
+  return shown;
 }
 
 /**
