@@ -120,8 +120,17 @@ export function applyLinkTextRubric(links: LinkEntry[], pageUrl: string): Findin
       .map((o) => ({ entry: o, normalized: normalizeHref(o.href, pageBase) }));
     const otherHrefs = new Set(otherEntries.map((x) => x.normalized));
     if (otherHrefs.size > 0 && !otherHrefs.has(thisHref)) {
+      // Dedupe by normalized href so the same destination written different
+      // ways (relative/absolute, www/non-www) doesn't appear multiple times
+      // in the conflicts list.
+      const seen = new Set<string>();
       const conflicts = otherEntries
         .filter((x) => x.normalized !== thisHref)
+        .filter((x) => {
+          if (seen.has(x.normalized)) return false;
+          seen.add(x.normalized);
+          return true;
+        })
         .map((x) => ({
           target: x.entry.css_path || `a[href="${x.entry.href}"]`,
           href: x.entry.href,
@@ -183,12 +192,33 @@ function derivePageBase(pageUrl: string): string {
   }
 }
 
-function normalizeHref(href: string, pageBase: string = 'https://x/'): string {
+/**
+ * Canonical form of a link href for "are these the same destination?" checks.
+ * Two hrefs that resolve to the same effective URL must produce the same
+ * normalized string, otherwise the redundant-link-text detector falsely flags
+ * them. Handles three common write-the-same-URL-differently cases:
+ *
+ *   - Relative vs absolute: `/foo` resolved against the page base
+ *   - www. vs no www.:      `example.com` and `www.example.com` are the same
+ *   - Reordered query:      `?a=1&b=2` and `?b=2&a=1` are the same
+ *
+ * Keeps the query string — for sites with PHP-style routing
+ * (`getpage.php?name=A` vs `getpage.php?name=B`), those are GENUINELY
+ * different destinations and should NOT collide.
+ */
+export function normalizeHref(href: string, pageBase: string = 'https://x/'): string {
   try {
     const u = new URL(href, pageBase);
     u.hash = '';
-    u.search = '';
-    return u.toString().replace(/\/$/, '');
+    let host = u.host.toLowerCase();
+    if (host.startsWith('www.')) host = host.slice(4);
+    let path = u.pathname.replace(/\/+$/, '');
+    if (path === '') path = '/';
+    const params = [...u.searchParams.entries()].sort(([a], [b]) => a.localeCompare(b));
+    const search = params.length > 0
+      ? '?' + params.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&')
+      : '';
+    return `${u.protocol.toLowerCase()}//${host}${path}${search}`;
   } catch {
     return href;
   }
