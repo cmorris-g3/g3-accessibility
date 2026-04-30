@@ -508,8 +508,7 @@ export function renderActionItems(items: ActionItem[], manifest: Manifest): stri
     return lines.join('\n');
   }
 
-  const totalTime = items.reduce((s, i) => s + i.time_minutes, 0);
-  lines.push(`Each item below is a discrete fix that can be completed in the time noted. Items are ordered by impact — work top to bottom. The full list fits within ${totalTime} minutes of focused work.`);
+  lines.push('Each item below is a discrete fix. Items are ordered by impact — work top to bottom.');
   lines.push('');
 
   for (const item of items) {
