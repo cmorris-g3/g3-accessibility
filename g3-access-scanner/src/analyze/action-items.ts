@@ -572,7 +572,14 @@ export function renderActionItems(items: ActionItem[], manifest: Manifest): stri
       lines.push(metaAfter[i] + (isLast ? '' : '  '));
     }
 
+    // Horizontal rule between items for visual breathing room — single blank
+    // lines feel crammed in the docx output. Skipped after the last item so
+    // the doc doesn't end on a stray rule.
     lines.push('');
+    if (item.rank < items.length) {
+      lines.push('---');
+      lines.push('');
+    }
   }
 
   return lines.join('\n');
