@@ -77,7 +77,8 @@ export async function crawl(opts: ScanOptions): Promise<string> {
     console.log(`[scanner] Warming session (visiting root)...`);
     const warmupPage = await context.newPage();
     try {
-      await warmupPage.goto(opts.url, { waitUntil: 'load', timeout: opts.timeoutMs });
+      await warmupPage.goto(opts.url, { waitUntil: 'domcontentloaded', timeout: opts.timeoutMs });
+      await warmupPage.waitForLoadState('load', { timeout: 5000 }).catch(() => {});
       await warmupPage.waitForTimeout(1000);
     } catch (err) {
       console.error(`[scanner] Warmup failed (continuing): ${(err as Error).message}`);
@@ -90,7 +91,8 @@ export async function crawl(opts: ScanOptions): Promise<string> {
     console.log(`[scanner] Warming session (visiting root)...`);
     const warmupPage = await context.newPage();
     try {
-      await warmupPage.goto(opts.url, { waitUntil: 'load', timeout: opts.timeoutMs });
+      await warmupPage.goto(opts.url, { waitUntil: 'domcontentloaded', timeout: opts.timeoutMs });
+      await warmupPage.waitForLoadState('load', { timeout: 5000 }).catch(() => {});
       await warmupPage.waitForTimeout(1000);
       console.log(`[scanner] Discovering URLs from ${opts.url}...`);
       urls = await discoverUrls(warmupPage, opts.url, opts.maxPages);
@@ -131,8 +133,11 @@ export async function crawl(opts: ScanOptions): Promise<string> {
       const page = await context.newPage();
 
       try {
-        await page.goto(url, { waitUntil: 'load', timeout: opts.timeoutMs });
-        await page.waitForLoadState('domcontentloaded');
+        // 'domcontentloaded' instead of 'load' so heavy WP sites with slow
+        // third-party widgets (chat, video embeds, social trackers) don't
+        // timeout the whole audit before any probe runs.
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: opts.timeoutMs });
+        await page.waitForLoadState('load', { timeout: 5000 }).catch(() => {});
         await page.waitForTimeout(1500);
         await runProbes(page, pageCtx, opts, aggregates);
         await defaultScreenshot(page, pageDir);

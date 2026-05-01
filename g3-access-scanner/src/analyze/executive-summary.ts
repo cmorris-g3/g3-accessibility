@@ -41,6 +41,13 @@ export function renderExecutiveSummary(
   );
   lines.push('');
 
+  if (manifest.urls.length < 10) {
+    lines.push(`## Pages scanned`);
+    lines.push('');
+    for (const u of manifest.urls) lines.push(`- ${u}`);
+    lines.push('');
+  }
+
   lines.push(`## Findings at a glance`);
   lines.push('');
   lines.push(renderSeverityTable(findings, maxPages));

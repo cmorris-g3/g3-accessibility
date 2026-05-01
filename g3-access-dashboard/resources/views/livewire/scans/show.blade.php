@@ -126,12 +126,13 @@
                                 @if (in_array($row->scan->status, ['queued', 'running'], true))
                                     <span class="text-xs text-neutral-400">{{ $row->scan->status }}</span>
                                 @else
-                                    <flux:button size="xs" variant="subtle"
-                                                 wire:click="rescanPage(@js($row->scan->url))"
-                                                 wire:loading.attr="disabled"
-                                                 wire:target="rescanPage">
+                                    <button type="button"
+                                            wire:click="rescanPage(@js($row->scan->url))"
+                                            wire:loading.attr="disabled"
+                                            wire:target="rescanPage(@js($row->scan->url))"
+                                            class="text-xs px-2 py-1 rounded border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed">
                                         Rescan
-                                    </flux:button>
+                                    </button>
                                 @endif
                             </td>
                         </tr>
