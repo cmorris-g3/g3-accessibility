@@ -20,7 +20,8 @@ export function renderExecutiveSummary(
   const findings = findingsFile.findings;
   const pageCount = manifest.urls.length;
   const maxPages = pageCount;
-  const date = manifest.ended_at.substring(0, 10);
+  const [y, m, d] = manifest.ended_at.substring(0, 10).split('-');
+  const date = `${m}/${d}/${y}`;
 
   const lines: string[] = [];
 
@@ -28,8 +29,7 @@ export function renderExecutiveSummary(
   lines.push('');
   lines.push(`**Site:** ${manifest.site}  `);
   lines.push(`**Date:** ${date}  `);
-  lines.push(`**Pages audited:** ${pageCount}  `);
-  lines.push(`**Run ID:** ${manifest.run_id}`);
+  lines.push(`**Pages audited:** ${pageCount}`);
   lines.push('');
   lines.push('---');
   lines.push('');

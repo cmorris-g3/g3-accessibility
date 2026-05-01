@@ -242,7 +242,7 @@ const TEMPLATES: Record<string, WorkItemTemplate> = {
   'link-name': {
     owner: 'developer',
     effort_base: 'S',
-    title: 'Fix links with no accessible name (axe)',
+    title: 'Fix links with no accessible name',
     what_to_do:
       'Axe detected links where the anchor has no determinable accessible name. These are usually icon-only links without aria-labels, or JavaScript-driven links. For each, add an `aria-label` describing the destination, or add visible text.',
     done_when: 'Every link on the page has a non-empty accessible name.',
@@ -380,7 +380,7 @@ const TEMPLATES: Record<string, WorkItemTemplate> = {
   'color-contrast': {
     owner: 'designer',
     effort_base: 'M',
-    title: 'Fix low-contrast text (axe-detected)',
+    title: 'Fix low-contrast text',
     what_to_do:
       'Axe detected text with insufficient contrast that the pixel-level contrast probe did not also catch (rare — likely a page where the contrast probe did not run, or a very specific fallback case). Review the designated color pairs with a designer and update the palette.',
     done_when: 'Axe reports no color-contrast violations.',
@@ -389,7 +389,7 @@ const TEMPLATES: Record<string, WorkItemTemplate> = {
   'target-size': {
     owner: 'developer',
     effort_base: 'S',
-    title: 'Enlarge touch targets (axe-detected)',
+    title: 'Enlarge touch targets',
     what_to_do:
       'Axe detected a touch target below the 24×24 minimum. Our `target-size` probe emits separate findings with exact measurements and CSS selectors — those are the authoritative ones to act on. This axe finding is a duplicate signal; fixing the corresponding `target-below-24px` findings will also resolve this.',
     done_when: 'No target-size violations from axe or our probe remain.',
@@ -416,7 +416,7 @@ const TEMPLATES: Record<string, WorkItemTemplate> = {
   'image-alt': {
     owner: 'content-editor',
     effort_base: 'S',
-    title: 'Add alt attribute to images missing one (axe-detected)',
+    title: 'Add alt attribute to images missing one',
     what_to_do:
       'Axe detected `<img>` elements with no `alt` attribute at all. In the CMS, edit each affected image and set an alt that describes the image content, or set `alt=""` if purely decorative. Our `missing-alt` finding type covers the same territory — this axe version may cover images our rubric missed.',
     done_when: 'Every `<img>` on the site has an `alt` attribute (empty or descriptive).',
