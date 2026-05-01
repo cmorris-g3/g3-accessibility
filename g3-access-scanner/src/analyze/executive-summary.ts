@@ -1,4 +1,4 @@
-import type { Finding, FindingsFile, Manifest, Severity, Summary } from '../types.js';
+import type { Finding, FindingsFile, Manifest, Severity } from '../types.js';
 import type { WorkItem } from './roadmap.js';
 import { groupIdenticalFindings } from './roadmap.js';
 import { AFFECTED_USER_GROUPS, type AffectedUserGroup } from './plain-language.js';
@@ -15,13 +15,11 @@ const SEVERITY_LABELS: Record<Severity, string> = {
 export function renderExecutiveSummary(
   findingsFile: FindingsFile,
   manifest: Manifest,
-  summary: Summary | null,
   workItems: WorkItem[],
 ): string {
   const findings = findingsFile.findings;
   const pageCount = manifest.urls.length;
   const maxPages = pageCount;
-  const probeCount = summary?.probes_enabled.length ?? 0;
   const date = manifest.ended_at.substring(0, 10);
 
   const lines: string[] = [];
@@ -39,7 +37,7 @@ export function renderExecutiveSummary(
   lines.push(`## What was checked`);
   lines.push('');
   lines.push(
-    `This audit tested ${pageCount} page${pageCount === 1 ? '' : 's'} against WCAG 2.2 Level A and AA using ${probeCount} automated check${probeCount === 1 ? '' : 's'}.`,
+    `This audit tested ${pageCount} page${pageCount === 1 ? '' : 's'} against WCAG 2.2 Level A and AA.`,
   );
   lines.push('');
 
@@ -66,27 +64,9 @@ export function renderExecutiveSummary(
   lines.push(renderTopReach(workItems, maxPages));
   lines.push('');
 
-  lines.push(`## Ownership distribution`);
-  lines.push('');
-  lines.push(renderOwnership(workItems));
-  lines.push('');
-
   lines.push(`## WCAG-Level distribution`);
   lines.push('');
   lines.push(renderWcagLevels(findings));
-  lines.push('');
-
-  lines.push(`## Where to go next`);
-  lines.push('');
-  lines.push('Role-specific handoff docs (each isolated to one owner, readable by the person making the handoff):');
-  lines.push('');
-  lines.push('- `editor-tasks.md` — CMS / content work');
-  lines.push('- `developer-tasks.md` — code / template / CSS work');
-  lines.push('- `designer-tasks.md` — color palette and sizing decisions');
-  lines.push('- `vendor-tasks.md` — items to file with third-party product vendors');
-  lines.push('- `reviewer-tasks.md` — items that need a human at a keyboard');
-  lines.push('');
-  lines.push('Full action plan: `roadmap.md`. Spreadsheet data: `findings.csv` and `work-items.csv`.');
   lines.push('');
 
   return lines.join('\n');
@@ -150,7 +130,8 @@ function renderAffectedBullets(findings: Finding[], maxPages: number): string[] 
   const keyboardOnly: AffectedFact[] = [
     { noun: 'pages with no skip-to-content link', count: clampPages(countPagesWith(findings, 'missing-skip-link'), maxPages) },
     { noun: 'keyboard trap flags', count: counts.get('keyboard-trap') ?? 0 },
-    { noun: 'focus-indicator issues', count: (counts.get('invisible-focus-indicator') ?? 0) + (counts.get('focus-obscured') ?? 0) },
+    { noun: 'focused elements with no visible focus indicator', count: counts.get('invisible-focus-indicator') ?? 0 },
+    { noun: 'focused elements that scroll outside the viewport', count: counts.get('focus-obscured') ?? 0 },
     { noun: 'pages where a full keyboard walk could not complete', count: clampPages(countPagesWith(findings, 'keyboard-walk-inconclusive'), maxPages) },
   ];
 
@@ -215,22 +196,6 @@ function renderTopReach(items: WorkItem[], maxPages: number): string {
     const pages = Math.min(item.pages_affected, maxPages);
     rows.push(`| ${i + 1} | ${escapeCell(item.title)} | ${item.covers_findings} | ${pages} |`);
   });
-  return rows.join('\n');
-}
-
-function renderOwnership(items: WorkItem[]): string {
-  const byOwner = new Map<string, { workItems: number; findings: number }>();
-  for (const item of items) {
-    const key = item.owner_label;
-    const entry = byOwner.get(key) ?? { workItems: 0, findings: 0 };
-    entry.workItems++;
-    entry.findings += item.covers_findings;
-    byOwner.set(key, entry);
-  }
-  const rows: string[] = ['| Owner | Work items | Findings covered |', '|---|---|---|'];
-  for (const [owner, data] of byOwner) {
-    rows.push(`| ${escapeCell(owner)} | ${data.workItems} | ${data.findings} |`);
-  }
   return rows.join('\n');
 }
 

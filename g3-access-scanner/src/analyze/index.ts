@@ -189,7 +189,7 @@ export async function analyze(runDir: string): Promise<void> {
   await writeFile(join(runDir, 'findings.csv'), renderFindingsCsv(workItems), 'utf8');
   console.log(`[analyze] Wrote findings.csv (${kept.length} rows)`);
 
-  const execSummary = renderExecutiveSummary(findingsFile, manifest, summary, workItems);
+  const execSummary = renderExecutiveSummary(findingsFile, manifest, workItems);
   await writeFile(join(runDir, 'executive-summary.md'), execSummary, 'utf8');
   console.log(`[analyze] Wrote executive-summary.md`);
 

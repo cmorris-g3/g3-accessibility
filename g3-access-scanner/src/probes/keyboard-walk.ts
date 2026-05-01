@@ -75,6 +75,20 @@ export async function runKeyboardWalk(
     (document.body as HTMLElement).focus();
   });
 
+  // Reset scroll to top before tabbing — earlier probes (images, contrast) leave the
+  // page scrolled deep down via CDP-level scrollIntoViewIfNeeded, which window.scrollTo
+  // cannot undo on sites where <body> has its own overflow context. Scrolling a known
+  // top-of-document element into view via Playwright uses the same CDP path and works.
+  try {
+    const topHandle = await page.$('body > *:first-child');
+    if (topHandle) {
+      await topHandle.scrollIntoViewIfNeeded({ timeout: 1000 });
+      await topHandle.dispose();
+    }
+  } catch {
+    // Best-effort; if it fails, the keyboard walk still runs.
+  }
+
   const steps: FocusStep[] = [];
   const traps: TrapEntry[] = [];
   const invisibleFocus: Array<{ step: number; selector: string }> = [];
@@ -88,6 +102,11 @@ export async function runKeyboardWalk(
 
   for (let i = 0; i < maxSteps; i++) {
     await page.keyboard.press('Tab');
+
+    // Mimic native browser behavior: scroll the focused element into view.
+    // JS el.scrollIntoView() can't escape overflow:hidden ancestors on some sites,
+    // so use Playwright's CDP-based scrollIntoViewIfNeeded via a kw_id selector.
+    await ensureFocusInView(page);
 
     const info = await gatherFocusInfo(page);
 
@@ -176,6 +195,34 @@ export async function runKeyboardWalk(
     invisible: invisibleFocus.length,
     off_screen: offScreenFocus.length,
   };
+}
+
+async function ensureFocusInView(page: Page): Promise<void> {
+  try {
+    const kwId = await page.evaluate((attr) => {
+      const a = document.activeElement as HTMLElement | null;
+      if (!a || a === document.body || a === document.documentElement) return null;
+      let id = a.getAttribute(attr);
+      if (!id) {
+        id = `kw-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+        a.setAttribute(attr, id);
+      }
+      return id;
+    }, KW_ID_ATTR);
+    if (!kwId) return;
+    const handle = await page.$(`[${KW_ID_ATTR}="${kwId}"]`);
+    if (!handle) return;
+    try {
+      await handle.scrollIntoViewIfNeeded({ timeout: 500 });
+    } catch {
+      // Element may be unreachable, fixed-positioned, or in an overflow:hidden
+      // container with no scrollable ancestor. Ignore — gather will still record.
+    } finally {
+      await handle.dispose();
+    }
+  } catch {
+    // Best-effort
+  }
 }
 
 async function cleanupKwTags(page: Page): Promise<void> {
