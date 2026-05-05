@@ -50,7 +50,7 @@ export function renderExecutiveSummary(
 
   lines.push(`## Findings at a glance`);
   lines.push('');
-  lines.push(renderSeverityTable(findings, maxPages));
+  lines.push(renderSeverityList(findings, maxPages));
   lines.push('');
 
   lines.push(`## How concentrated the problems are`);
@@ -79,15 +79,17 @@ export function renderExecutiveSummary(
   return lines.join('\n');
 }
 
-function renderSeverityTable(findings: Finding[], maxPages: number): string {
-  const rows: string[] = ['| Severity | Count | Pages affected |', '|---|---|---|'];
+function renderSeverityList(findings: Finding[], maxPages: number): string {
+  const lines: string[] = [];
   for (const sev of SEVERITY_ORDER) {
     const inTier = findings.filter((f) => f.severity === sev);
     if (inTier.length === 0) continue;
     const pages = Math.min(new Set(inTier.map((f) => f.url)).size, maxPages);
-    rows.push(`| ${SEVERITY_LABELS[sev]} | ${inTier.length} | ${pages} |`);
+    lines.push(
+      `- **${SEVERITY_LABELS[sev]}:** ${inTier.length} finding${inTier.length === 1 ? '' : 's'} across ${pages} page${pages === 1 ? '' : 's'}`,
+    );
   }
-  return rows.join('\n');
+  return lines.join('\n');
 }
 
 function renderConcentration(findings: Finding[]): string {
@@ -198,12 +200,12 @@ function clampPages(value: number, maxPages: number): number {
 function renderTopReach(items: WorkItem[], maxPages: number): string {
   const top = [...items].sort((a, b) => b.covers_findings - a.covers_findings).slice(0, 5);
   if (top.length === 0) return '_No findings._';
-  const rows: string[] = ['| # | Work item | Findings covered | Pages affected |', '|---|---|---|---|'];
-  top.forEach((item, i) => {
-    const pages = Math.min(item.pages_affected, maxPages);
-    rows.push(`| ${i + 1} | ${escapeCell(item.title)} | ${item.covers_findings} | ${pages} |`);
-  });
-  return rows.join('\n');
+  return top
+    .map((item, i) => {
+      const pages = Math.min(item.pages_affected, maxPages);
+      return `${i + 1}. **${item.title}** — covers ${item.covers_findings} finding${item.covers_findings === 1 ? '' : 's'} across ${pages} page${pages === 1 ? '' : 's'}`;
+    })
+    .join('\n');
 }
 
 function renderWcagLevels(findings: Finding[]): string {
@@ -213,14 +215,11 @@ function renderWcagLevels(findings: Finding[]): string {
     if (m) counts[m[1]]++;
     else counts.unknown++;
   }
-  const rows: string[] = ['| WCAG level | Findings |', '|---|---|'];
-  if (counts.A > 0) rows.push(`| Level A | ${counts.A} |`);
-  if (counts.AA > 0) rows.push(`| Level AA | ${counts.AA} |`);
-  if (counts.AAA > 0) rows.push(`| Level AAA | ${counts.AAA} |`);
-  if (counts.unknown > 0) rows.push(`| Unclassified | ${counts.unknown} |`);
-  return rows.join('\n');
-}
-
-function escapeCell(s: string): string {
-  return s.replace(/\|/g, '\\|').replace(/\n/g, ' ');
+  const lines: string[] = [];
+  const fmt = (label: string, n: number) => `- **${label}:** ${n} finding${n === 1 ? '' : 's'}`;
+  if (counts.A > 0) lines.push(fmt('Level A', counts.A));
+  if (counts.AA > 0) lines.push(fmt('Level AA', counts.AA));
+  if (counts.AAA > 0) lines.push(fmt('Level AAA', counts.AAA));
+  if (counts.unknown > 0) lines.push(fmt('Unclassified', counts.unknown));
+  return lines.join('\n');
 }

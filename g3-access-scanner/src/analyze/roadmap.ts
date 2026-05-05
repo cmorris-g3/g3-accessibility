@@ -696,13 +696,13 @@ function renderWorkItem(item: WorkItem): string {
     );
     lines.push('');
     lines.push(
-      `${templateLevel} template-level issue${templateLevel === 1 ? '' : 's'} (same markup repeated across pages); ${uniquePerPage} page-specific. Fix the template-level rows once and the finding count collapses accordingly.`,
+      `${templateLevel} template-level issue${templateLevel === 1 ? '' : 's'} (same markup repeated across pages); ${uniquePerPage} page-specific. Fix the template-level instances once and the finding count collapses accordingly.`,
     );
   } else {
     lines.push(`**Instances to fix (${item.findings.length}):**`);
   }
   lines.push('');
-  lines.push(renderInstancesTable(item, groups));
+  lines.push(renderInstanceBlocks(item, groups));
   lines.push('');
   lines.push('<details><summary>Technical reference</summary>');
   lines.push('');
@@ -760,38 +760,75 @@ function findingKey(f: Finding): string {
   return `${f.finding_type}|${target}|${outerHtml}`;
 }
 
-function renderInstancesTable(item: WorkItem, groups: InstanceGroup[]): string {
+function renderInstanceBlocks(item: WorkItem, groups: InstanceGroup[]): string {
   const lines: string[] = [];
   const type = item.finding_types[0];
   const schema = tableSchemaFor(type, item.owner);
+  const fieldColumns = schema.columns.filter((c) => c.header !== 'Page');
 
-  const headers = ['#', 'Pages', ...schema.columns.filter((c) => c.header !== 'Page').map((c) => c.header)];
-  lines.push('| ' + headers.join(' | ') + ' |');
-  lines.push('|' + headers.map(() => '---').join('|') + '|');
+  type Chunk = { kind: 'meta'; text: string } | { kind: 'bullets'; heading: string; items: string[] };
 
   groups.forEach((g, i) => {
-    const pagesCell = renderPagesCell(g.pages, item.pages_affected);
-    const cells = schema.columns
-      .filter((c) => c.header !== 'Page')
-      .map((c) => escapeCell(c.extract(g.rep)));
-    lines.push(`| ${i + 1} | ${pagesCell} | ${cells.join(' | ')} |`);
+    const chunks: Chunk[] = [];
+    const pages = Array.from(g.pages).sort();
+    const isMultiPage = pages.length > 1;
+    const isAll = pages.length === item.pages_affected;
+
+    if (isMultiPage) {
+      const scope = isAll
+        ? `${pages.length} pages (all audited pages)`
+        : `${pages.length} pages`;
+      chunks.push({ kind: 'meta', text: `**Pages:** ${scope} — shared element, fix once.` });
+    } else {
+      chunks.push({ kind: 'meta', text: `**Page:** \`${shortUrl(pages[0])}\`` });
+    }
+
+    for (const c of fieldColumns) {
+      chunks.push({ kind: 'meta', text: `**${c.header}:** ${c.extract(g.rep)}` });
+    }
+
+    if (isMultiPage) {
+      chunks.push({
+        kind: 'bullets',
+        heading: '**Also appears on:**',
+        items: capUrlList(pages),
+      });
+    }
+
+    if (groups.length > 1) {
+      lines.push(`**Instance ${i + 1} of ${groups.length}**`);
+      lines.push('');
+    }
+
+    for (let j = 0; j < chunks.length; j++) {
+      const chunk = chunks[j];
+      const next = chunks[j + 1];
+      if (chunk.kind === 'meta') {
+        const useHardBreak = next && next.kind === 'meta';
+        lines.push(chunk.text + (useHardBreak ? '  ' : ''));
+      } else {
+        lines.push('');
+        lines.push(chunk.heading);
+        lines.push('');
+        for (const b of chunk.items) lines.push(b);
+        lines.push('');
+      }
+    }
+    lines.push('');
   });
 
   return lines.join('\n');
 }
 
-function renderPagesCell(pages: Set<string>, totalPagesInWorkItem: number): string {
-  const arr = Array.from(pages);
-  if (arr.length === 1) {
-    return '`' + shortUrl(arr[0]) + '`';
+const URL_BULLET_CAP = 5;
+
+function capUrlList(urls: string[]): string[] {
+  const shown = urls.slice(0, URL_BULLET_CAP).map((u) => `- \`${shortUrl(u)}\``);
+  const remaining = urls.length - URL_BULLET_CAP;
+  if (remaining > 0) {
+    shown.push(`- _…and ${remaining} more_`);
   }
-  const isAll = arr.length === totalPagesInWorkItem;
-  const label = isAll
-    ? `**${arr.length} pages (all audited pages)**`
-    : `**${arr.length} pages**`;
-  const shown = arr.slice(0, 3).map((u) => '`' + shortUrl(u) + '`').join(', ');
-  const more = arr.length > 3 ? `, +${arr.length - 3} more` : '';
-  return `${label}: ${shown}${more}`;
+  return shown;
 }
 
 interface ColumnSpec {
@@ -1057,10 +1094,6 @@ function shortUrl(url: string): string {
   } catch {
     return url;
   }
-}
-
-function escapeCell(s: string): string {
-  return s.replace(/\|/g, '\\|').replace(/\n/g, ' ');
 }
 
 function priorityName(p: Priority): string {
