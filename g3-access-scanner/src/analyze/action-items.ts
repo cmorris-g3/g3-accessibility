@@ -65,6 +65,16 @@ const FIX_LEVEL: Record<string, FixLevel> = {
   'inconsistent-identification': 'template',
   'inconsistent-help': 'template',
   'missing-skip-link': 'template',
+  'landmark-one-main': 'template',
+  'landmark-no-duplicate-main': 'template',
+  'landmark-no-duplicate-banner': 'template',
+  'landmark-no-duplicate-contentinfo': 'template',
+  'landmark-banner-is-top-level': 'template',
+  'landmark-contentinfo-is-top-level': 'template',
+  'landmark-main-is-top-level': 'template',
+  'landmark-complementary-is-top-level': 'template',
+  'landmark-unique': 'template',
+  'region': 'template',
 
   // Instance-level: each occurrence is its own edit
   'missing-alt': 'instance',
@@ -139,6 +149,16 @@ const VISIBILITY: Record<string, number> = {
   'inconsistent-identification': 1,
   'inconsistent-help': 1,
   'missing-skip-link': 1,
+  'landmark-one-main': 1,
+  'landmark-no-duplicate-main': 1,
+  'landmark-no-duplicate-banner': 1,
+  'landmark-no-duplicate-contentinfo': 1,
+  'landmark-banner-is-top-level': 1,
+  'landmark-contentinfo-is-top-level': 1,
+  'landmark-main-is-top-level': 1,
+  'landmark-complementary-is-top-level': 1,
+  'landmark-unique': 1,
+  'region': 1,
 };
 
 // Per-instance time (instance fixes): minutes to fix ONE element.
@@ -189,6 +209,16 @@ const TEMPLATE_TIME: Record<string, number> = {
   'text-spacing-content-loss': 60,
   'content-lost-in-forced-colors': 60,
   'inconsistent-navigation': 60,
+  'landmark-one-main': 30,
+  'landmark-no-duplicate-main': 15,
+  'landmark-no-duplicate-banner': 15,
+  'landmark-no-duplicate-contentinfo': 15,
+  'landmark-banner-is-top-level': 30,
+  'landmark-contentinfo-is-top-level': 30,
+  'landmark-main-is-top-level': 30,
+  'landmark-complementary-is-top-level': 20,
+  'landmark-unique': 20,
+  'region': 45,
 };
 
 // Finding types that are out of scope for the 3-hour agency engagement.
@@ -301,6 +331,16 @@ const TEMPLATE_GUIDANCE: Record<string, string> = {
   'inconsistent-identification': 'Same UI control labeled differently across pages. Standardize labels (e.g., always "Search" not "Find" on some pages).',
   'inconsistent-help': 'Help/contact mechanisms appear in different locations across pages. Place help links/buttons in a consistent spot.',
   'missing-skip-link': 'Add a "Skip to main content" link as the first focusable element on every page. Visually hidden until focused.',
+  'landmark-one-main': 'Edit the theme template so the page-content wrapper uses `<main>` (or add `role="main"`). Common WP fix: change `<div id="main">` to `<main id="main">`.',
+  'landmark-no-duplicate-main': 'Reduce to one `<main>` element per page. Demote others to `<section>` or `<article>` as appropriate.',
+  'landmark-no-duplicate-banner': 'Keep one banner landmark (the site header). Remove `role="banner"` or change `<header>` to `<div>` on the duplicates.',
+  'landmark-no-duplicate-contentinfo': 'Keep one contentinfo landmark (the site footer). Remove `role="contentinfo"` or change `<footer>` to `<div>` on the duplicates.',
+  'landmark-banner-is-top-level': 'Move the `<header>` (or `role="banner"` element) so it is a direct child of `<body>`, not nested inside `<main>` or another landmark.',
+  'landmark-contentinfo-is-top-level': 'Move the `<footer>` (or `role="contentinfo"` element) so it is a direct child of `<body>`, not nested inside `<main>` or another landmark.',
+  'landmark-main-is-top-level': 'Move the `<main>` element to the top level of `<body>`, not nested inside another landmark.',
+  'landmark-complementary-is-top-level': 'Move `<aside>` / `role="complementary"` elements to the top level of `<body>`, not nested inside other landmarks.',
+  'landmark-unique': 'Add `aria-label` to differentiate same-role landmarks (e.g., `<nav aria-label="Primary">`, `<nav aria-label="Footer">`).',
+  'region': 'Wrap orphan content in landmark elements. Common WP fix: ensure the theme wraps body content in `<main>`, header chrome in `<header>`, and footer chrome in `<footer>`.',
 };
 
 const TIME_BUDGET_MINUTES = 180;
@@ -686,6 +726,16 @@ function humanType(type: string): string {
     'inconsistent-identification': 'consistent control labels',
     'inconsistent-help': 'consistent help mechanism placement',
     'missing-skip-link': 'add skip-to-main-content link',
+    'landmark-one-main': 'add a single <main> landmark',
+    'landmark-no-duplicate-main': 'remove duplicate <main> landmarks',
+    'landmark-no-duplicate-banner': 'remove duplicate banner landmarks',
+    'landmark-no-duplicate-contentinfo': 'remove duplicate footer landmarks',
+    'landmark-banner-is-top-level': 'move banner to top-level of document',
+    'landmark-contentinfo-is-top-level': 'move footer to top-level of document',
+    'landmark-main-is-top-level': 'move <main> to top-level of document',
+    'landmark-complementary-is-top-level': 'move <aside> to top-level of document',
+    'landmark-unique': 'differentiate same-role landmarks',
+    'region': 'wrap orphan content in landmark regions',
   };
   return dictionary[type] ?? type.replace(/-/g, ' ');
 }

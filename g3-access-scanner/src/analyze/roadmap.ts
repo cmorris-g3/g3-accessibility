@@ -458,6 +458,98 @@ const TEMPLATES: Record<string, WorkItemTemplate> = {
     done_when: 'No focusable element is inside an `aria-hidden="true"` subtree.',
     technical_detail: 'WCAG 4.1.2 Name, Role, Value.',
   },
+  'landmark-one-main': {
+    owner: 'developer',
+    effort_base: 'XS',
+    title: 'Add a single `<main>` landmark to wrap the primary page content',
+    what_to_do:
+      'Each page must have exactly one `<main>` element (or `role="main"`) wrapping the primary content. Edit the theme template so the page-content wrapper uses `<main>` instead of a generic `<div>`. Screen-reader and keyboard users rely on this landmark to skip past chrome.',
+    done_when: 'Every audited page has exactly one `<main>` landmark wrapping its primary content.',
+    technical_detail:
+      'WCAG 1.3.1 Info and Relationships. axe rule: landmark-one-main. Common WP fix: change the theme\'s `<div id="main">` to `<main id="main">`.',
+  },
+  'landmark-no-duplicate-main': {
+    owner: 'developer',
+    effort_base: 'XS',
+    title: 'Remove duplicate `<main>` landmarks',
+    what_to_do:
+      'A page has more than one `<main>` (or `role="main"`) element. Pick the wrapper that holds the primary content and remove the others, or change them to `<section>` / `<article>` as appropriate.',
+    done_when: 'Each page has exactly one main landmark.',
+    technical_detail: 'WCAG 1.3.1. axe rule: landmark-no-duplicate-main.',
+  },
+  'landmark-no-duplicate-banner': {
+    owner: 'developer',
+    effort_base: 'XS',
+    title: 'Remove duplicate banner landmarks',
+    what_to_do:
+      'A page has more than one banner landmark (typically `<header>` at page level, or `role="banner"`). Keep one — the site header — and remove the role from the others.',
+    done_when: 'Each page has at most one banner landmark.',
+    technical_detail: 'WCAG 1.3.1. axe rule: landmark-no-duplicate-banner.',
+  },
+  'landmark-no-duplicate-contentinfo': {
+    owner: 'developer',
+    effort_base: 'XS',
+    title: 'Remove duplicate contentinfo (footer) landmarks',
+    what_to_do:
+      'A page has more than one contentinfo landmark (typically `<footer>` at page level, or `role="contentinfo"`). Keep one — the site footer — and remove the role from the others.',
+    done_when: 'Each page has at most one contentinfo landmark.',
+    technical_detail: 'WCAG 1.3.1. axe rule: landmark-no-duplicate-contentinfo.',
+  },
+  'landmark-banner-is-top-level': {
+    owner: 'developer',
+    effort_base: 'XS',
+    title: 'Move the banner landmark to the top of the document',
+    what_to_do:
+      'The site header (banner) is nested inside another landmark (commonly `<main>`). Move the `<header>` (or `role="banner"` element) to be a direct child of `<body>` so screen-reader landmark navigation works correctly.',
+    done_when: 'The banner landmark is a top-level child of `<body>`, not nested inside another landmark.',
+    technical_detail: 'WCAG 1.3.1. axe rule: landmark-banner-is-top-level.',
+  },
+  'landmark-contentinfo-is-top-level': {
+    owner: 'developer',
+    effort_base: 'XS',
+    title: 'Move the contentinfo (footer) landmark to the top of the document',
+    what_to_do:
+      'The footer (contentinfo) is nested inside another landmark. Move the `<footer>` (or `role="contentinfo"` element) to be a direct child of `<body>`.',
+    done_when: 'The contentinfo landmark is a top-level child of `<body>`, not nested inside another landmark.',
+    technical_detail: 'WCAG 1.3.1. axe rule: landmark-contentinfo-is-top-level.',
+  },
+  'landmark-main-is-top-level': {
+    owner: 'developer',
+    effort_base: 'XS',
+    title: 'Move the `<main>` landmark to the top of the document',
+    what_to_do:
+      'The `<main>` element is nested inside another landmark. Move it so it is a direct child of `<body>` (or of a single wrapping `<div>` with no role) so screen-reader users can jump to it directly.',
+    done_when: 'The main landmark is at the top level of the document.',
+    technical_detail: 'WCAG 1.3.1. axe rule: landmark-main-is-top-level.',
+  },
+  'landmark-complementary-is-top-level': {
+    owner: 'developer',
+    effort_base: 'XS',
+    title: 'Move complementary (`<aside>`) landmarks to the top level',
+    what_to_do:
+      'A complementary landmark (`<aside>` or `role="complementary"`) is nested inside another landmark. Move it out so it sits at the page top level alongside main, banner, and contentinfo.',
+    done_when: 'No complementary landmark is nested inside another landmark.',
+    technical_detail: 'WCAG 1.3.1. axe rule: landmark-complementary-is-top-level.',
+  },
+  'landmark-unique': {
+    owner: 'developer',
+    effort_base: 'S',
+    title: 'Differentiate same-role landmarks with unique accessible names',
+    what_to_do:
+      'A page has multiple landmarks of the same role (e.g., two `<nav>` regions) without unique accessible names. Add `aria-label` or `aria-labelledby` to each so screen-reader users can tell them apart (e.g., "Primary navigation", "Footer navigation").',
+    done_when: 'Every same-role landmark on a page has a unique accessible name.',
+    technical_detail: 'WCAG 1.3.1. axe rule: landmark-unique.',
+  },
+  'region': {
+    owner: 'developer',
+    effort_base: 'S',
+    title: 'Wrap orphan content in landmark regions',
+    what_to_do:
+      'Some content on the page sits outside any landmark region (header, nav, main, aside, footer, or named section). Wrap orphan blocks in the appropriate landmark element so screen-reader users can navigate to them via landmark navigation.',
+    done_when: 'All meaningful page content is inside a landmark region.',
+    technical_detail:
+      'WCAG 1.3.1. axe rule: region. Common fix in WP: ensure the theme wraps the body in `<main>`, the header in `<header>`, and the footer in `<footer>`.',
+  },
 };
 
 const SEVERITY_ORDER: Record<Severity, number> = { critical: 0, serious: 1, moderate: 2, minor: 3 };
