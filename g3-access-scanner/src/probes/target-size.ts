@@ -4,6 +4,7 @@ import type { PageContext } from '../types.js';
 
 type Exception =
   | 'inline-text-link'
+  | 'sufficient-spacing'
   | 'user-agent-control'
   | 'visually-hidden'
   | 'zero-dimension'
@@ -20,6 +21,7 @@ interface TargetSizeEntry {
   passes_aa: boolean;
   passes_aaa: boolean;
   exception: Exception;
+  spacing_clearance: number | null;
 }
 
 const AA_MIN = 24;
@@ -40,11 +42,16 @@ export async function runTargetSize(page: Page, ctx: PageContext): Promise<{ fai
       ].join(',');
 
       const elements = Array.from(document.querySelectorAll<HTMLElement>(selector));
-      const out: TargetSizeEntry[] = [];
 
-      for (const el of elements) {
+      interface Candidate {
+        el: HTMLElement;
+        rect: DOMRect;
+        minDim: number;
+        exception: Exception;
+      }
+
+      const candidates: Candidate[] = elements.map((el) => {
         const rect = el.getBoundingClientRect();
-
         const tag = el.tagName.toLowerCase();
         let exception: Exception = null;
 
@@ -58,7 +65,27 @@ export async function runTargetSize(page: Page, ctx: PageContext): Promise<{ fai
           exception = 'user-agent-control';
         }
 
-        const minDim = Math.min(rect.width, rect.height);
+        return { el, rect, minDim: Math.min(rect.width, rect.height), exception };
+      });
+
+      // Targets that occupy space on screen are obstacles for the WCAG 2.5.8
+      // spacing exception, whether or not they are themselves excepted.
+      const obstacles = candidates.filter(
+        (c) => c.exception !== 'zero-dimension' && c.exception !== 'visually-hidden',
+      );
+
+      const out: TargetSizeEntry[] = [];
+
+      for (const c of candidates) {
+        const { el, rect, minDim } = c;
+        let exception = c.exception;
+        let spacingClearance: number | null = null;
+
+        if (exception === null && minDim < AA_MIN) {
+          spacingClearance = spacingClearanceFor(c, obstacles, AA_MIN / 2);
+          if (spacingClearance >= AA_MIN / 2) exception = 'sufficient-spacing';
+        }
+
         const accessibleName =
           el.getAttribute('aria-label') ??
           (el.textContent ?? '').trim().slice(0, 80) ??
@@ -72,9 +99,58 @@ export async function runTargetSize(page: Page, ctx: PageContext): Promise<{ fai
           width: Math.round(rect.width),
           height: Math.round(rect.height),
           passes_aa: minDim >= AA_MIN || exception !== null,
-          passes_aaa: minDim >= AAA_MIN || exception !== null,
+          // 2.5.5 (AAA) has no spacing exception, so it does not clear AAA.
+          passes_aaa:
+            minDim >= AAA_MIN || (exception !== null && exception !== 'sufficient-spacing'),
           exception,
+          spacing_clearance:
+            spacingClearance === null || !Number.isFinite(spacingClearance)
+              ? null
+              : Math.round(spacingClearance * 10) / 10,
         });
+      }
+
+      // WCAG 2.5.8 "Spacing" exception: an undersized target conforms if a
+      // 24px-diameter circle centred on its bounding box intersects neither
+      // another target's bounding box nor the circle of another undersized
+      // target. Returns the smallest clearance from this target's circle
+      // centre to any obstacle — >= radius means no intersection.
+      function spacingClearanceFor(
+        subject: Candidate,
+        others: Candidate[],
+        radius: number,
+      ): number {
+        const cx = subject.rect.left + subject.rect.width / 2;
+        const cy = subject.rect.top + subject.rect.height / 2;
+        let clearance = Infinity;
+
+        for (const other of others) {
+          if (other.el === subject.el) continue;
+          // Nested controls always overlap their ancestor; the spacing
+          // exception is about neighbouring targets, not containment.
+          if (other.el.contains(subject.el) || subject.el.contains(other.el)) continue;
+
+          const undersized = other.minDim < AA_MIN;
+          const d = undersized
+            ? // circle vs circle: centres must be >= 2 * radius apart, so
+              // subtract the other circle's radius to compare against radius
+              Math.hypot(
+                other.rect.left + other.rect.width / 2 - cx,
+                other.rect.top + other.rect.height / 2 - cy,
+              ) - radius
+            : pointToRectDistance(cx, cy, other.rect);
+
+          if (d < clearance) clearance = d;
+          if (clearance < radius) return clearance;
+        }
+
+        return clearance;
+      }
+
+      function pointToRectDistance(x: number, y: number, r: DOMRect): number {
+        const dx = Math.max(r.left - x, 0, x - r.right);
+        const dy = Math.max(r.top - y, 0, y - r.bottom);
+        return Math.hypot(dx, dy);
       }
 
       function isVisuallyHidden(el: HTMLElement, rect: DOMRect): boolean {

@@ -45,6 +45,7 @@ export interface TargetSizeEntry {
   passes_aa: boolean;
   passes_aaa: boolean;
   exception: string | null;
+  spacing_clearance?: number | null;
 }
 
 export interface ContrastEntry {
