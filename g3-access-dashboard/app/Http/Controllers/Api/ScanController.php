@@ -14,6 +14,51 @@ use Illuminate\Http\Request;
 
 class ScanController extends Controller
 {
+    /**
+     * List this licence's scans, newest first.
+     *
+     * Without this an agent has no way to find the id of an earlier scan to
+     * rescan, short of having recorded it at submit time.
+     */
+    public function index(Request $request): JsonResponse
+    {
+        /** @var License $license */
+        $license = $request->attributes->get('license');
+
+        $validated = $request->validate([
+            'type' => ['nullable', 'in:page,full'],
+            'status' => ['nullable', 'in:queued,running,complete,failed'],
+            'top_level' => ['nullable', 'boolean'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $query = Scan::where('license_id', $license->id);
+
+        if (! empty($validated['type'])) {
+            $query->where('type', $validated['type']);
+        }
+        if (! empty($validated['status'])) {
+            $query->where('status', $validated['status']);
+        }
+        // Child page scans of a full-site scan are noise when you are looking
+        // for a baseline to rescan; default to hiding them.
+        if ($request->boolean('top_level', true)) {
+            $query->whereNull('parent_scan_id');
+        }
+
+        $paginated = $query->orderByDesc('id')->paginate((int) ($validated['per_page'] ?? 25));
+
+        return response()->json([
+            'scans' => $paginated->getCollection()->map(fn ($s) => $this->publicScan($s))->values(),
+            'meta' => [
+                'total' => $paginated->total(),
+                'current_page' => $paginated->currentPage(),
+                'last_page' => $paginated->lastPage(),
+                'per_page' => $paginated->perPage(),
+            ],
+        ]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([

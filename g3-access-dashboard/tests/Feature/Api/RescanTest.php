@@ -185,6 +185,45 @@ class RescanTest extends TestCase
             ->assertJsonPath('error.code', 'SCAN_NOT_FOUND');
     }
 
+    public function test_scans_can_be_listed_newest_first_and_hide_child_page_scans(): void
+    {
+        ['key' => $key, 'license' => $license, 'site_url' => $site] = $this->mintLicense();
+
+        $full = Scan::create(['license_id' => $license->id, 'type' => 'full', 'status' => 'complete', 'url' => 'https://example.com']);
+        Scan::create([
+            'license_id' => $license->id,
+            'type' => 'page',
+            'status' => 'complete',
+            'url' => 'https://example.com/about',
+            'parent_scan_id' => $full->id,
+        ]);
+        $standalone = Scan::create(['license_id' => $license->id, 'type' => 'page', 'status' => 'complete', 'url' => 'https://example.com/solo']);
+
+        $response = $this->getJson('/api/scans', $this->authHeaders($key, $site));
+
+        $response->assertOk();
+        // child page scan is hidden by default
+        $response->assertJsonCount(2, 'scans');
+        $response->assertJsonPath('scans.0.id', $standalone->id);
+        $response->assertJsonPath('scans.1.id', $full->id);
+
+        $withChildren = $this->getJson('/api/scans?top_level=0', $this->authHeaders($key, $site));
+        $withChildren->assertOk();
+        $withChildren->assertJsonCount(3, 'scans');
+    }
+
+    public function test_scan_list_does_not_leak_another_licenses_scans(): void
+    {
+        ['key' => $key, 'site_url' => $site] = $this->mintLicense();
+        ['license' => $other] = $this->mintLicense(siteUrl: 'https://other.test');
+
+        Scan::create(['license_id' => $other->id, 'type' => 'page', 'status' => 'complete', 'url' => 'https://other.test/']);
+
+        $this->getJson('/api/scans', $this->authHeaders($key, $site))
+            ->assertOk()
+            ->assertJsonCount(0, 'scans');
+    }
+
     /** Scan::$fillable excludes created_at, so set it directly. */
     private function backdate(Scan $scan, \DateTimeInterface $when): void
     {
