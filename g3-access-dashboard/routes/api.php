@@ -12,6 +12,7 @@ Route::middleware('license:partial')->group(function () {
 });
 
 Route::middleware('license')->group(function () {
+    Route::get('/scans', [ScanController::class, 'index']);
     Route::post('/scans', [ScanController::class, 'store']);
     Route::get('/scans/{scan}', [ScanController::class, 'show']);
     Route::post('/scans/{scan}/rescan', [ScanController::class, 'rescan']);
