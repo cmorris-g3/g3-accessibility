@@ -108,3 +108,39 @@ always scope by scan.
 
 `QUEUE_CONNECTION=database` — a worker must be running (`php artisan queue:work`) or scans sit
 at `queued` forever. That is the first thing to check if a scan never starts.
+
+## Deployment
+
+Live: `https://accessibility.group3solutions.com`
+Host: `ssh -i ~/.ssh/group3.pem ubuntu@plugins.group3solutions.com`
+Path: `/var/www/g3-accessibility` (git checkout, tracks `origin/main`)
+Stack: `APP_ENV=production`, MySQL (`g3_accessibility`), `QUEUE_CONNECTION=database`,
+php-fpm as `www-data`, files owned `ubuntu`.
+
+```bash
+cd /var/www/g3-accessibility && git pull --ff-only
+cd g3-access-dashboard
+php artisan migrate --force
+php artisan route:clear && php artisan route:cache
+php artisan config:clear && php artisan config:cache
+php artisan route:list | grep api/scans        # verify AFTER caching
+```
+
+**The route cache will bite you.** This host caches routes
+(`bootstrap/cache/routes-v7.php`). A deploy that copies files without clearing it leaves
+new *controller* code live — classes autoload fresh — while new *routes* 404, because
+`routes/api.php` is only read when the cache is built. That exact split happened on
+2026-10-14: `?scan_id=` filtering worked while `/api/scans/{id}/findings` 404'd, and the
+cache was five months stale. It looks like a partial deploy and isn't.
+
+Always re-run `route:list` **after** `route:cache`, not just after `route:clear` — caching
+is the step that can silently undo the fix.
+
+Smoke test without credentials (each should be `401 MISSING_KEY`, not 404/405):
+
+```bash
+for p in /api/scans /api/scans/1 /api/scans/1/findings /api/findings; do
+  curl -s -o /dev/null -w "$p -> %{http_code}\n" -H 'Accept: application/json' \
+    https://accessibility.group3solutions.com$p
+done
+```
