@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Finding;
 use App\Models\License;
+use App\Models\Scan;
 use App\Support\UrlNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,6 +19,7 @@ class FindingController extends Controller
 
         $validated = $request->validate([
             'url' => ['nullable', 'string'],
+            'scan_id' => ['nullable', 'integer'],
             'status' => ['nullable', 'in:open,resolved,ignored,regressed,all'],
             'severity' => ['nullable', 'in:critical,serious,moderate,minor'],
             'page' => ['nullable', 'integer', 'min:1'],
@@ -25,6 +27,23 @@ class FindingController extends Controller
         ]);
 
         $query = Finding::where('license_id', $license->id);
+
+        // Accepts either ?scan_id=N or the nested route /scans/{scan}/findings.
+        $scanId = $validated['scan_id'] ?? $request->route('scan');
+
+        if (! empty($scanId)) {
+            $scan = Scan::where('id', $scanId)
+                ->where('license_id', $license->id)
+                ->first();
+            if (! $scan) {
+                return response()->json([
+                    'error' => ['code' => 'SCAN_NOT_FOUND', 'message' => 'No such scan for this license.'],
+                ], 404);
+            }
+            // Findings attach to the page scan, so a full-site scan matches
+            // against its children too.
+            $query->whereIn('last_seen_scan_id', $scan->findingScanIds());
+        }
 
         if (! empty($validated['url'])) {
             $normalized = UrlNormalizer::normalize($validated['url']) ?? $validated['url'];

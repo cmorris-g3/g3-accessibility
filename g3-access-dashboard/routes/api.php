@@ -14,6 +14,8 @@ Route::middleware('license:partial')->group(function () {
 Route::middleware('license')->group(function () {
     Route::post('/scans', [ScanController::class, 'store']);
     Route::get('/scans/{scan}', [ScanController::class, 'show']);
+    Route::post('/scans/{scan}/rescan', [ScanController::class, 'rescan']);
+    Route::get('/scans/{scan}/findings', [FindingController::class, 'index']);
 
     Route::get('/findings', [FindingController::class, 'index']);
     Route::post('/findings/{finding}/ignore', [FindingController::class, 'ignore']);
