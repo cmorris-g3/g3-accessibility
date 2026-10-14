@@ -7,6 +7,7 @@ use App\Jobs\DiscoverSiteUrlsJob;
 use App\Jobs\RunPageScanJob;
 use App\Models\License;
 use App\Models\Scan;
+use App\Models\ScanPage;
 use App\Support\UrlNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -69,6 +70,86 @@ class ScanController extends Controller
         DiscoverSiteUrlsJob::dispatch($scan->id, $sitemapUrls);
 
         return response()->json(['scan' => $this->publicScan($scan)], 202);
+    }
+
+    /**
+     * Repeat an earlier scan against exactly the same inputs.
+     *
+     * For a page scan that is the same URL. For a full-site scan it is the
+     * exact page list the original scan covered, replayed via
+     * DiscoverSiteUrlsJob's supplied-URL path so discovery is skipped — which
+     * is the point: a rescan that re-crawls can return a different page set
+     * and makes before/after comparison meaningless.
+     *
+     * Quotas are deliberately still enforced. A page rescan inside the
+     * cooldown window gets the usual 429 + Retry-After; lower cooldown_s on
+     * the licence (scan_quotas) if a tight fix-then-recheck loop is wanted.
+     */
+    public function rescan(Request $request, int $scan): JsonResponse
+    {
+        /** @var License $license */
+        $license = $request->attributes->get('license');
+
+        $source = Scan::where('id', $scan)->where('license_id', $license->id)->first();
+        if (! $source) {
+            return response()->json(['error' => ['code' => 'NOT_FOUND']], 404);
+        }
+
+        if ($source->type === 'page') {
+            if (! $source->url) {
+                return response()->json([
+                    'error' => ['code' => 'NO_URL_TO_RESCAN', 'message' => 'Source scan has no URL recorded.'],
+                ], 422);
+            }
+
+            if ($rate = $this->pageScanRateError($license, $source->url)) {
+                return $rate;
+            }
+
+            $new = Scan::create([
+                'license_id' => $license->id,
+                'type' => 'page',
+                'status' => 'queued',
+                'url' => $source->url,
+                'source_scan_id' => $source->id,
+            ]);
+
+            RunPageScanJob::dispatch($new->id);
+
+            return response()->json(['scan' => $this->publicScan($new)], 202);
+        }
+
+        $urls = ScanPage::where('scan_id', $source->id)
+            ->orderBy('id')
+            ->pluck('url')
+            ->unique()
+            ->values()
+            ->all();
+
+        if (count($urls) === 0) {
+            return response()->json([
+                'error' => [
+                    'code' => 'NO_PAGES_TO_RESCAN',
+                    'message' => 'Source scan recorded no pages (it may have failed during discovery). Start a fresh full scan instead.',
+                ],
+            ], 422);
+        }
+
+        if ($rate = $this->fullScanRateError($license)) {
+            return $rate;
+        }
+
+        $new = Scan::create([
+            'license_id' => $license->id,
+            'type' => 'full',
+            'status' => 'queued',
+            'url' => $source->url,
+            'source_scan_id' => $source->id,
+        ]);
+
+        DiscoverSiteUrlsJob::dispatch($new->id, $urls);
+
+        return response()->json(['scan' => $this->publicScan($new)], 202);
     }
 
     private function pageScanRateError(License $license, string $normalizedUrl): ?JsonResponse
@@ -165,6 +246,7 @@ class ScanController extends Controller
             'status' => $scan->status,
             'url' => $scan->url,
             'parent_scan_id' => $scan->parent_scan_id,
+            'source_scan_id' => $scan->source_scan_id,
             'pages_total' => $scan->pages_total,
             'pages_done' => $scan->pages_done,
             'findings_total' => $scan->findings_total,
