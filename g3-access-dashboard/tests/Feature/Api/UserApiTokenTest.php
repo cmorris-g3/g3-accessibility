@@ -189,6 +189,17 @@ class UserApiTokenTest extends TestCase
         $this->assertNotNull($token->fresh()->last_used_at);
     }
 
+    public function test_activation_is_refused_for_a_user_token(): void
+    {
+        ['key' => $key] = $this->mintUserToken();
+
+        $this->postJson('/api/activate', ['site_url' => 'https://www.haysmed.com'], $this->tokenHeaders($key))
+            ->assertStatus(400)
+            ->assertJsonPath('error.code', 'NOT_APPLICABLE');
+
+        $this->assertSame(0, License::internal()->activations()->count());
+    }
+
     public function test_a_license_key_still_requires_its_site_header(): void
     {
         ['key' => $key] = $this->mintLicense();

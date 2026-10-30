@@ -13,6 +13,18 @@ class ActivateController extends Controller
 {
     public function store(Request $request): JsonResponse
     {
+        // A user token has no site pin to clear. Activating one would pin the
+        // internal licence to whichever site asked first and then 409 every
+        // other site, so refuse it outright rather than write junk.
+        if ($request->attributes->get('user_token')) {
+            return response()->json([
+                'error' => [
+                    'code' => 'NOT_APPLICABLE',
+                    'message' => 'User API tokens need no activation; call the scan endpoints directly.',
+                ],
+            ], 400);
+        }
+
         $validated = $request->validate([
             'site_url' => ['required', 'string', 'url'],
             'plugin_version' => ['nullable', 'string', 'max:64'],
