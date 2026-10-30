@@ -8,6 +8,7 @@ export interface ScanPageOptions {
   viewport: { w: number; h: number };
   timeoutMs: number;
   probes: string[];
+  consent?: 'accept-all' | 'none';
 }
 
 export async function scanPage(opts: ScanPageOptions): Promise<string> {
@@ -20,6 +21,7 @@ export async function scanPage(opts: ScanPageOptions): Promise<string> {
     probes: opts.probes,
     urlList: [opts.url],
     runId: opts.runId,
+    consent: opts.consent,
   });
 
   await analyze(runDir);
