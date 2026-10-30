@@ -5,6 +5,44 @@ Verified against `https://accessibility.group3solutions.com/api` on 2026-10-14.
 
 ## Auth
 
+Two kinds of credential work. **For agent use, prefer a user token** — it is one
+credential for every site.
+
+### User API token (preferred for agents)
+
+```
+Authorization: Bearer g3u_xxxxxxxx
+Accept: application/json
+```
+
+No `X-Site-Url`, no `/api/activate`, no per-site minting. Create one in the dashboard
+under **Settings → API tokens** (no SSH needed), or on the host:
+
+```bash
+php artisan g3:mint-user-token --user=you@example.com --name="ADA agent"
+# optional: --hosts=www.haysmed.com,www.pawneevalleyhospital.com --expires=2027-10-30
+php artisan g3:mint-user-token --list
+php artisan g3:mint-user-token --revoke=3
+```
+
+The token is printed once; only its sha256 is stored. `--hosts` is an exact-match
+allowlist checked in the middleware against `url`, `sitemap_urls`, `site_url` and
+`X-Site-Url`; a mismatch is `403 HOST_NOT_ALLOWED`. **Exact means exact**:
+`www.haysmed.com` does not admit `haysmed.com`. Omit `--hosts` to allow any host.
+
+Scans a token creates are owned by the **internal licence** — the same tenant the
+dashboard's ad-hoc scanner writes to. So a token can list and rescan scans started from
+the UI, and vice versa. It cannot see a client licence's scans; that boundary is
+unchanged.
+
+`GET /api/license` echoes back which token answered, under `token`, plus the live
+`quotas`. Use it as the credential smoke test.
+
+Errors specific to this path: `TOKEN_REVOKED`, `TOKEN_EXPIRED` (both `403`, and unlike a
+licence they apply to reads too), `HOST_NOT_ALLOWED` (`403`).
+
+### Licence key (what the WordPress plugin uses)
+
 ```
 Authorization: Bearer <licence key>
 X-Site-Url: https://www.example.com     # must match the pin EXACTLY
@@ -22,7 +60,7 @@ A licence is pinned to **one** site (`max_sites = 1`). Two sites need two keys.
 php artisan tinker --execute="echo \App\Models\LicenseActivation::pluck('site_url')->implode(PHP_EOL);"
 ```
 
-## Minting a key
+## Minting a licence key
 
 ```bash
 php artisan g3:mint-license \
@@ -44,6 +82,15 @@ on first run, but an agent has no plugin. Either mint with `--activate`, or call
 Defaults (`config/scanner.php`): `cooldown_s 60` (same URL), `concurrency 2`,
 `daily_cap 100`, `fullscan_per_day 1`. Exceeding one returns `429` with a `Retry-After`
 header — honour it rather than retrying blindly.
+
+**User tokens bill their scans to the internal licence, which is deliberately looser**
+(`cooldown_s 30`, `concurrency 3`, `daily_cap 500`, `fullscan_per_day 20`) because one
+token spans every site, and the stock `fullscan_per_day 1` would let one site's baseline
+block all the others for a day. `GET /api/license` reports the live numbers.
+
+One thing is *not* relaxed: `FULLSCAN_IN_PROGRESS`. Full crawls still run one at a time
+per licence, so a second full scan while one is running gets `429` whichever site it is
+for. Finish the first, then start the next — that is what keeps the scanner box sane.
 
 Rescan is **not** exempt from the cooldown. For a tight fix-then-recheck loop, override
 per licence:
