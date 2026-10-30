@@ -19,6 +19,7 @@ import { runTextSpacing } from './probes/text-spacing.js';
 import { runReducedMotion } from './probes/reduced-motion.js';
 import { runSensoryLanguage } from './probes/sensory-language.js';
 import { runConsistency } from './probes/consistency.js';
+import { primeConsent, type ConsentResult } from './lib/consent.js';
 import type { Manifest, ScanOptions, Summary, PageContext } from './types.js';
 import { CONTRACT_VERSION } from './types.js';
 
@@ -54,6 +55,26 @@ function dedupeUrls(urls: string[]): string[] {
   return out;
 }
 
+async function primeConsentOnce(
+  page: import('playwright').Page,
+  mode: 'accept-all' | 'none',
+  timeoutMs: number,
+): Promise<ConsentResult> {
+  if (mode === 'none') {
+    console.log('[scanner] Consent priming disabled (--consent none); consent-gated widgets will be invisible.');
+    return { mode, cmp: null, accepted: false, detail: 'consent priming disabled' };
+  }
+  const result = await primeConsent(page, mode, timeoutMs);
+  if (result.accepted) {
+    console.log(`[scanner] Consent accepted via ${result.cmp} (${result.detail}).`);
+  } else if (result.cmp) {
+    console.log(`[scanner] WARNING: ${result.cmp} detected but consent NOT confirmed (${result.detail}).`);
+  } else {
+    console.log(`[scanner] No consent manager detected (${result.detail}).`);
+  }
+  return result;
+}
+
 export async function crawl(opts: ScanOptions): Promise<string> {
   const startedAt = new Date().toISOString();
   const runId = opts.runId ?? runIdNow();
@@ -71,6 +92,14 @@ export async function crawl(opts: ScanOptions): Promise<string> {
     ignoreHTTPSErrors: process.env.SCANNER_STRICT_TLS !== '1',
   });
 
+  const consentMode = opts.consent ?? 'accept-all';
+  let consent: ConsentResult = {
+    mode: consentMode,
+    cmp: null,
+    accepted: false,
+    detail: 'warmup did not complete',
+  };
+
   let urls: string[] = [opts.url];
 
   if (opts.urlList && opts.urlList.length > 0) {
@@ -80,6 +109,7 @@ export async function crawl(opts: ScanOptions): Promise<string> {
       await warmupPage.goto(opts.url, { waitUntil: 'domcontentloaded', timeout: opts.timeoutMs });
       await warmupPage.waitForLoadState('load', { timeout: 5000 }).catch(() => {});
       await warmupPage.waitForTimeout(1000);
+      consent = await primeConsentOnce(warmupPage, consentMode, opts.timeoutMs);
     } catch (err) {
       console.error(`[scanner] Warmup failed (continuing): ${(err as Error).message}`);
     } finally {
@@ -94,6 +124,7 @@ export async function crawl(opts: ScanOptions): Promise<string> {
       await warmupPage.goto(opts.url, { waitUntil: 'domcontentloaded', timeout: opts.timeoutMs });
       await warmupPage.waitForLoadState('load', { timeout: 5000 }).catch(() => {});
       await warmupPage.waitForTimeout(1000);
+      consent = await primeConsentOnce(warmupPage, consentMode, opts.timeoutMs);
       console.log(`[scanner] Discovering URLs from ${opts.url}...`);
       urls = await discoverUrls(warmupPage, opts.url, opts.maxPages);
     } catch (err) {
@@ -201,6 +232,7 @@ export async function crawl(opts: ScanOptions): Promise<string> {
       'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36',
     wcag_version: '2.2',
     wcag_levels: ['A', 'AA'],
+    consent,
   };
 
   await writeJson(`${runDir}/manifest.json`, manifest);

@@ -25,6 +25,12 @@ const DEFAULT_PROBES = [
 
 const PAGE_PROBES = DEFAULT_PROBES.filter((p) => p !== 'consistency');
 
+function assertConsentMode(value: string): asserts value is 'accept-all' | 'none' {
+  if (value !== 'accept-all' && value !== 'none') {
+    throw new Error(`--consent must be "accept-all" or "none", got "${value}"`);
+  }
+}
+
 const program = new Command();
 
 program
@@ -52,8 +58,14 @@ program
     'Path to a newline-separated file of URLs to audit (bypasses sitemap/link-crawl discovery)',
   )
   .option('-r, --run-id <id>', 'Explicit run ID for the output directory (default: timestamp-based)')
+  .option(
+    '-c, --consent <mode>',
+    'Cookie consent before probing: "accept-all" (default) makes consent-gated widgets visible; "none" leaves them hidden. Runs are only comparable when this matches.',
+    'accept-all',
+  )
   .action(async (url: string, options) => {
     try {
+      assertConsentMode(options.consent);
       let urlList: string[] | undefined;
       if (options.urlList) {
         const raw = await readFile(options.urlList, 'utf8');
@@ -74,6 +86,7 @@ program
         probes: options.probes,
         urlList,
         runId: options.runId,
+        consent: options.consent,
       });
     } catch (err) {
       console.error('[scanner] FAILED:', (err as Error).message);
@@ -133,10 +146,16 @@ program
     (v) => v.split(',').map((s) => s.trim()),
     PAGE_PROBES,
   )
+  .option(
+    '-c, --consent <mode>',
+    'Cookie consent before probing: "accept-all" (default) makes consent-gated widgets visible; "none" leaves them hidden. Runs are only comparable when this matches.',
+    'accept-all',
+  )
   .action(async (url: string, options) => {
     const origLog = console.log;
     console.log = (...args: unknown[]) => console.error(...args);
     try {
+      assertConsentMode(options.consent);
       const probes = (options.probes as string[]).filter((p) => p !== 'consistency');
       const runDir = await scanPage({
         url,
@@ -145,6 +164,7 @@ program
         viewport: { w: options.viewportWidth, h: options.viewportHeight },
         timeoutMs: options.timeoutMs,
         probes,
+        consent: options.consent,
       });
       console.log = origLog;
       process.stdout.write(JSON.stringify({ run_dir: runDir }, null, 2) + '\n');

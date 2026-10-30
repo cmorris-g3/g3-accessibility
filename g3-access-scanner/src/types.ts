@@ -1,3 +1,5 @@
+import type { ConsentResult } from './lib/consent.js';
+
 export const CONTRACT_VERSION = '0.1';
 
 export type Severity = 'critical' | 'serious' | 'moderate' | 'minor';
@@ -46,6 +48,13 @@ export interface Manifest {
   user_agent: string;
   wcag_version: string;
   wcag_levels: string[];
+  /**
+   * What the scanner did about cookie consent. A run that accepted consent
+   * sees consent-gated widgets; one that did not cannot, so two runs are only
+   * comparable when this matches. Optional: run dirs written before this
+   * field existed must still parse.
+   */
+  consent?: ConsentResult;
 }
 
 export interface Summary {
@@ -73,6 +82,7 @@ export interface ScanOptions {
   probes: string[];
   urlList?: string[];
   runId?: string;
+  consent?: 'accept-all' | 'none';
 }
 
 export interface PageContext {
