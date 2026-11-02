@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { Finding, Manifest, Severity } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -351,6 +352,18 @@ const TEMPLATE_GUIDANCE: Record<string, string> = {
 const TIME_BUDGET_MINUTES = 180;
 const SOFT_CAP = 50;
 
+/**
+ * Stable id for an action item, used to name its screenshot file so the
+ * capture step and the renderer agree without passing state between runs.
+ * Deliberately not the rank: rank shifts whenever scoring changes, which
+ * would orphan every previously captured image.
+ */
+export function actionItemShotId(item: ActionItem): string {
+  const basis = `${item.finding_type}|${item.url ?? ''}|${item.selector ?? ''}`;
+  const hash = createHash('sha1').update(basis).digest('hex').slice(0, 10);
+  return `${item.finding_type}-${hash}`;
+}
+
 export interface ActionItem {
   rank: number;
   level: FixLevel;
@@ -583,7 +596,11 @@ function collectWcag(findings: Finding[]): string[] {
 // Markdown rendering
 // ---------------------------------------------------------------------------
 
-export function renderActionItems(items: ActionItem[], manifest: Manifest): string {
+export function renderActionItems(
+  items: ActionItem[],
+  manifest: Manifest,
+  availableShots: ReadonlySet<string> = new Set(),
+): string {
   const lines: string[] = [];
   const date = manifest.ended_at.substring(0, 10);
 
@@ -609,6 +626,17 @@ export function renderActionItems(items: ActionItem[], manifest: Manifest): stri
     lines.push('');
     lines.push(item.guidance);
     lines.push('');
+
+    // Annotated screenshot, when one was captured for this item. Relative
+    // path: pandoc resolves it against the run directory and embeds the PNG
+    // in the .docx, so the delivered document is self-contained.
+    const shotId = actionItemShotId(item);
+    if (availableShots.has(shotId)) {
+      lines.push(`![Screenshot: ${headlineFor(item).replace(/[[\]]/g, '')}](shots/${shotId}.png)`);
+      lines.push('');
+      lines.push('*The red outline marks the element described above.*');
+      lines.push('');
+    }
 
     // The body is a sequence of chunks — each is either a metadata line
     // (rendered as `text  ` with a two-space hard break so consecutive

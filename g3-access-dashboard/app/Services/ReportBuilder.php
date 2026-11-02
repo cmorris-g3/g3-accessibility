@@ -169,10 +169,44 @@ class ReportBuilder
             copy($src, $dst);
         }
 
+        // Annotated screenshots referenced by action-items.md as shots/<id>.png.
+        // pandoc embeds them into the .docx, so they must sit alongside the
+        // markdown before conversion.
+        $this->copyShots($sourceDir, $dir);
+
         $this->rewriteMdReferences($dir);
         $this->convertMarkdownToDocx($dir);
 
+        // The PNGs now live inside each .docx; shipping them loose as well
+        // would just bloat the zip with duplicates.
+        $this->removeDirectory($dir.'/shots');
+
         return $dir;
+    }
+
+    /** Copy the run's shots/ directory into the deliverables dir, if present. */
+    private function copyShots(string $sourceDir, string $dir): void
+    {
+        $src = $sourceDir.'/shots';
+        if (! is_dir($src)) {
+            return;
+        }
+        $dst = $dir.'/shots';
+        @mkdir($dst, 0775, true);
+        foreach (glob($src.'/*.png') ?: [] as $png) {
+            copy($png, $dst.'/'.basename($png));
+        }
+    }
+
+    private function removeDirectory(string $dir): void
+    {
+        if (! is_dir($dir)) {
+            return;
+        }
+        foreach (glob($dir.'/*') ?: [] as $f) {
+            is_dir($f) ? $this->removeDirectory($f) : @unlink($f);
+        }
+        @rmdir($dir);
     }
 
     /**
@@ -205,6 +239,9 @@ class ReportBuilder
                 $mdPath,
                 '--from=gfm',
                 '--to=docx',
+                // Relative image paths (shots/<id>.png) resolve against the
+                // deliverables dir, not against pandoc's cwd.
+                '--resource-path=' . $dir,
                 '--output=' . $docxPath,
             ]);
             $process->setTimeout(30);

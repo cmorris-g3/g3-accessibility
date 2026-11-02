@@ -28,7 +28,7 @@ import { renderDesignerTasks } from './designer-tasks.js';
 import { renderVendorTasks } from './vendor-tasks.js';
 import { renderReviewerTasks } from './reviewer-tasks.js';
 import { attachFingerprints } from './fingerprint.js';
-import { selectActionItems, renderActionItems } from './action-items.js';
+import { selectActionItems, renderActionItems, actionItemShotId } from './action-items.js';
 import { slugifyUrl } from '../lib/fs.js';
 
 async function readJson<T>(path: string): Promise<T> {
@@ -194,7 +194,31 @@ export async function analyze(runDir: string): Promise<void> {
   console.log(`[analyze] Wrote executive-summary.md`);
 
   const actionItems = selectActionItems(kept, manifest.urls.length);
-  const actionItemsMd = renderActionItems(actionItems, manifest);
+  // Screenshots are captured by a separate `scanner shoot` pass (it needs
+  // the network; analyze does not). Embed whichever PNGs already exist,
+  // and always (re)write the spec so `shoot` knows what to capture next.
+  const shotsDir = join(runDir, 'shots');
+  let availableShots = new Set<string>();
+  try {
+    availableShots = new Set(
+      (await readdir(shotsDir)).filter((f) => f.endsWith('.png')).map((f) => f.slice(0, -4)),
+    );
+  } catch {
+    /* no shots captured yet */
+  }
+
+  const shotSpec = actionItems
+    .filter((i) => i.url && i.selector)
+    .map((i) => ({
+      id: actionItemShotId(i),
+      url: i.url as string,
+      selector: i.selector as string,
+      caption: `Item ${i.rank}`,
+    }));
+  await writeFile(join(runDir, 'shots-spec.json'), JSON.stringify(shotSpec, null, 2) + '\n', 'utf8');
+  console.log(`[analyze] Wrote shots-spec.json (${shotSpec.length} capturable items, ${availableShots.size} already captured)`);
+
+  const actionItemsMd = renderActionItems(actionItems, manifest, availableShots);
   await writeFile(join(runDir, 'action-items.md'), actionItemsMd, 'utf8');
   const totalMin = actionItems.reduce((s, i) => s + i.time_minutes, 0);
   console.log(`[analyze] Wrote action-items.md (${actionItems.length} tasks, ${totalMin} min)`);

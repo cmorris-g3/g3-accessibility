@@ -6,6 +6,7 @@ import { analyze } from './analyze/index.js';
 import { discover } from './discover.js';
 import { scanPage } from './scan-page.js';
 import { consistencyPass } from './consistency-pass.js';
+import { captureShots, type ShotTarget } from './screenshots.js';
 
 const DEFAULT_PROBES = [
   'axe',
@@ -194,6 +195,56 @@ program
     } catch (err) {
       console.log = origLog;
       console.error('[consistency-pass] FAILED:', (err as Error).message);
+      process.exitCode = 1;
+    }
+  });
+
+program
+  .command('shoot')
+  .description('Capture annotated element screenshots for a run directory\'s shots-spec.json. Writes PNGs to <run-dir>/shots/; re-run `analyze` afterwards to embed them.')
+  .argument('<run-dir>', 'Run directory produced by `scanner audit` and analysed at least once')
+  .option('-t, --timeout-ms <n>', 'Page load timeout in ms', (v) => parseInt(v, 10), 30_000)
+  .option('-w, --viewport-width <n>', 'Viewport width in pixels', (v) => parseInt(v, 10), 1440)
+  .option('-h, --viewport-height <n>', 'Viewport height in pixels', (v) => parseInt(v, 10), 900)
+  .option('-p, --padding <n>', 'Pixels of context kept around the element', (v) => parseInt(v, 10), 80)
+  .option('-l, --limit <n>', 'Capture at most this many items', (v) => parseInt(v, 10), 0)
+  .option(
+    '-c, --consent <mode>',
+    'Cookie consent before capturing: "accept-all" (default) or "none".',
+    'accept-all',
+  )
+  .action(async (runDir: string, options) => {
+    try {
+      assertConsentMode(options.consent);
+      const specPath = `${runDir}/shots-spec.json`;
+      let targets: ShotTarget[];
+      try {
+        targets = JSON.parse(await readFile(specPath, 'utf8'));
+      } catch {
+        throw new Error(`No shots-spec.json in ${runDir} — run \`scanner analyze\` first.`);
+      }
+      if (options.limit > 0) targets = targets.slice(0, options.limit);
+      if (targets.length === 0) {
+        console.log('[shoot] Nothing to capture.');
+        return;
+      }
+
+      const results = await captureShots(targets, {
+        outDir: `${runDir}/shots`,
+        viewport: { w: options.viewportWidth, h: options.viewportHeight },
+        timeoutMs: options.timeoutMs,
+        consent: options.consent,
+        padding: options.padding,
+      });
+
+      const ok = results.filter((r) => r.ok).length;
+      console.log(`[shoot] Captured ${ok}/${results.length} screenshots into ${runDir}/shots/`);
+      for (const r of results.filter((x) => !x.ok)) {
+        console.log(`[shoot]   skipped ${r.id}: ${r.reason}`);
+      }
+      console.log('[shoot] Re-run `scanner analyze` on this run directory to embed them.');
+    } catch (err) {
+      console.error('[shoot] FAILED:', (err as Error).message);
       process.exitCode = 1;
     }
   });
