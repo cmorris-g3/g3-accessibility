@@ -64,6 +64,12 @@ class ReportBuilder
                 if (! $analyzedDir) {
                     throw new RuntimeException("Scanner output directory not found for scan #{$scan->id}");
                 }
+                // A page scan's run dir is persistent and already analysed, so
+                // only re-analyse when there are screenshots to fold in.
+                if (is_dir($this->shotsCacheDir($scan))) {
+                    $this->restoreCachedShots($scan, $analyzedDir);
+                    $this->scanner->analyze($analyzedDir);
+                }
             } else {
                 $analyzedDir = $this->buildFullScanArtifacts($scan);
                 $tempDirsToCleanup[] = $analyzedDir;
@@ -145,9 +151,82 @@ class ReportBuilder
             }
         }
 
+        // Screenshots captured by an earlier `g3:capture-shots` run live
+        // outside the throwaway run dir; drop them in before analysing so the
+        // markdown embeds them.
+        $this->restoreCachedShots($scan, $dir);
+
         $this->scanner->analyze($dir);
 
         return $dir;
+    }
+
+    /** Where captured screenshots persist between report builds. */
+    public function shotsCacheDir(Scan $scan): string
+    {
+        return storage_path('app/scan-shots/'.$scan->id);
+    }
+
+    private function restoreCachedShots(Scan $scan, string $dir): void
+    {
+        $cache = $this->shotsCacheDir($scan);
+        if (! is_dir($cache)) {
+            return;
+        }
+        @mkdir($dir.'/shots', 0775, true);
+        foreach (glob($cache.'/*.png') ?: [] as $png) {
+            copy($png, $dir.'/shots/'.basename($png));
+        }
+    }
+
+    /**
+     * Capture annotated screenshots for this scan and persist them.
+     *
+     * Deliberately separate from buildForScan: capture hits the client's live
+     * site, and a report download must never do that as a side effect.
+     *
+     * @return array{captured:int, cache:string}
+     */
+    public function captureShotsForScan(Scan $scan, ?int $limit = null): array
+    {
+        [$dir, $isTemp] = $this->artifactsDirFor($scan);
+
+        try {
+            $this->scanner->shoot($dir, $limit);
+
+            $cache = $this->shotsCacheDir($scan);
+            @mkdir($cache, 0775, true);
+            $captured = 0;
+            foreach (glob($dir.'/shots/*.png') ?: [] as $png) {
+                copy($png, $cache.'/'.basename($png));
+                $captured++;
+            }
+
+            return ['captured' => $captured, 'cache' => $cache];
+        } finally {
+            // A page scan's run dir is the real one on disk — never delete it.
+            if ($isTemp) {
+                $this->rrmdir($dir);
+            }
+        }
+    }
+
+    /**
+     * The analysed run dir for a scan, plus whether it is a throwaway.
+     *
+     * @return array{0:string,1:bool}
+     */
+    private function artifactsDirFor(Scan $scan): array
+    {
+        if ($scan->type === 'page') {
+            $dir = $this->findScanRunDir($scan);
+            if (! $dir) {
+                throw new RuntimeException("Scanner output directory not found for scan #{$scan->id}");
+            }
+            return [$dir, false];
+        }
+
+        return [$this->buildFullScanArtifacts($scan), true];
     }
 
     /**

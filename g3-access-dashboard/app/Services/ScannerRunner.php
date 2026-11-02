@@ -63,6 +63,29 @@ class ScannerRunner
         }
     }
 
+    /**
+     * Capture annotated element screenshots for a run dir that has already
+     * been analysed (analyze writes the shots-spec.json this reads).
+     */
+    public function shoot(string $runDir, ?int $limit = null, ?int $processTimeoutMs = null): void
+    {
+        // Capturing loads real pages, so it needs a far longer budget than
+        // the per-scan timeout used for offline steps.
+        $processTimeoutMs = $processTimeoutMs ?? max((int) config('scanner.timeout_ms'), 600_000);
+
+        $args = ['shoot', $runDir];
+        if ($limit !== null && $limit > 0) {
+            $args[] = '--limit';
+            $args[] = (string) $limit;
+        }
+
+        [$stdout, $stderr, $exitCode] = $this->run($args, $processTimeoutMs);
+
+        if ($exitCode !== 0) {
+            throw new ScannerException('shoot', $exitCode, $stderr, $stdout);
+        }
+    }
+
     public function consistencyPass(string $runDir, string $siteHost, ?int $processTimeoutMs = null): array
     {
         $processTimeoutMs = $processTimeoutMs ?? (int) config('scanner.timeout_ms');
