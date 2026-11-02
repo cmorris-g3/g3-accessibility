@@ -461,3 +461,40 @@ test('headlines identify which item they are', () => {
   assert.ok(md.includes('/services'), 'page-specific item names its page');
   assert.ok(md.includes('home page'), 'the root page is named readably');
 });
+
+test('a contrast template item gets one screenshot target per colour pair', () => {
+  const pair = (fg: string, bg: string, ratio: number, n: number, sel: string) =>
+    Array.from({ length: n }, (_, i) =>
+      makeFinding({
+        finding_type: 'contrast-below-aa-normal',
+        url: 'https://x.test/a',
+        target: `${sel}:nth-child(${i + 1})`,
+        context: { foreground_hex: fg, background_hex: bg, ratio, required: 4.5 },
+      }),
+    );
+
+  const items = selectActionItems(
+    [...pair('#7f7f7f', '#ffffff', 4, 9, 'p.body'), ...pair('#949797', '#ffffff', 2.94, 2, 'span.meta')],
+    1,
+  );
+  const contrast = items.find((i) => i.finding_type === 'contrast-below-aa-normal')!;
+
+  assert.equal(contrast.shot_samples.length, 2, 'one representative per distinct pair');
+  assert.ok(contrast.shot_samples[0].label.includes('#7f7f7f on #ffffff'), 'dominant pair first');
+  assert.ok(contrast.shot_samples[0].label.includes('9 elements'));
+  assert.ok(contrast.shot_samples[1].label.includes('#949797 on #ffffff'));
+  assert.ok(contrast.shot_samples.every((s) => s.url && s.selector), 'each is a real element');
+});
+
+test('template items that are not contrast still get one representative', () => {
+  const items = selectActionItems(
+    [
+      makeFinding({ finding_type: 'no-focus-indicator', url: 'https://x.test/a', target: 'a.nav' }),
+      makeFinding({ finding_type: 'no-focus-indicator', url: 'https://x.test/b', target: 'a.nav' }),
+    ],
+    2,
+  );
+  const item = items.find((i) => i.finding_type === 'no-focus-indicator')!;
+  assert.equal(item.shot_samples.length, 1);
+  assert.equal(item.shot_samples[0].selector, 'a.nav');
+});

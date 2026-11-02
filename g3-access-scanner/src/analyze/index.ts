@@ -207,14 +207,15 @@ export async function analyze(runDir: string): Promise<void> {
     /* no shots captured yet */
   }
 
-  const shotSpec = actionItems
-    .filter((i) => i.url && i.selector)
-    .map((i) => ({
-      id: actionItemShotId(i),
-      url: i.url as string,
-      selector: i.selector as string,
-      caption: `Item ${i.rank}`,
+  const shotSpec = actionItems.flatMap((i) => {
+    const base = actionItemShotId(i);
+    return i.shot_samples.map((sample, idx) => ({
+      id: idx === 0 ? base : `${base}-${idx + 1}`,
+      url: sample.url,
+      selector: sample.selector,
+      caption: sample.label || `Item ${i.rank}`,
     }));
+  });
   await writeFile(join(runDir, 'shots-spec.json'), JSON.stringify(shotSpec, null, 2) + '\n', 'utf8');
   console.log(`[analyze] Wrote shots-spec.json (${shotSpec.length} capturable items, ${availableShots.size} already captured)`);
 

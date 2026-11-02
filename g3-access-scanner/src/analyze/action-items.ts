@@ -364,13 +364,27 @@ export function actionItemShotId(item: ActionItem): string {
   return `${item.finding_type}-${hash}`;
 }
 
+export interface ShotSample {
+  url: string;
+  selector: string;
+  /** Caption shown under the image, e.g. the colour pair it demonstrates. */
+  label: string;
+}
+
 export interface ActionItem {
   rank: number;
   level: FixLevel;
   finding_type: string;
   severity: Severity;
   url: string | null;       // present for instance items, null for template
-  selector: string | null;  // present for instance items
+  selector: string | null;
+  /**
+   * Elements to photograph for this item. Template items have no single
+   * url/selector of their own, so without a representative they would never
+   * get a screenshot — which is exactly what happened to text contrast, the
+   * largest item on most sites.
+   */
+  shot_samples: ShotSample[];
   current_value: string | null;
   guidance: string;         // what to do
   wcag_refs: string[];
@@ -420,6 +434,7 @@ export function selectActionItems(findings: Finding[], totalPages: number): Acti
         rank: 0,
         level: 'template',
         finding_type: type,
+        shot_samples: templateShotSamples(type, group),
         severity: worstSeverity(group),
         url: null,
         selector: null,
@@ -483,6 +498,10 @@ export function selectActionItems(findings: Finding[], totalPages: number): Acti
           rank: 0,
           level: 'instance',
           finding_type: type,
+          shot_samples:
+            sample.url && sample.target
+              ? [{ url: sample.url, selector: sample.target, label: '' }]
+              : [],
           severity: sample.severity,
           // For single-URL groups, url is the page; for multi-URL groups,
           // we keep the first URL as a "primary" and surface the rest via
@@ -563,6 +582,59 @@ function contrastPairsSummary(findings: Finding[]): string {
   return `${headline} Pairs: ${lines.join('; ')}.`;
 }
 
+/**
+ * Representative elements to photograph for a template item.
+ *
+ * Template items describe one site-wide change and carry no url/selector, so
+ * they were silently unphotographable — text contrast, usually the biggest
+ * item on the page, never got an image. Pick real failing elements instead.
+ *
+ * For contrast we take one per distinct colour pair, because "459 contrast
+ * failures" is four different problems and a single picture of one grey
+ * would misrepresent the other three.
+ */
+function templateShotSamples(type: string, findings: Finding[], max = 3): ShotSample[] {
+  const usable = findings.filter((f) => f.url && f.target);
+  if (usable.length === 0) return [];
+
+  const isContrast = type.startsWith('contrast-below') || type === 'non-text-contrast-below-aa';
+  if (!isContrast) {
+    const f = usable[0];
+    return [{ url: f.url, selector: f.target as string, label: '' }];
+  }
+
+  const byPair = new Map<string, { f: Finding; count: number }>();
+  for (const f of usable) {
+    const c = (f.context ?? {}) as Record<string, unknown>;
+    const fg = typeof c.foreground_hex === 'string' ? c.foreground_hex : null;
+    const bg = typeof c.background_hex === 'string' ? c.background_hex : null;
+    if (!fg || !bg) continue;
+    const key = `${fg}|${bg}`;
+    const hit = byPair.get(key);
+    if (hit) hit.count++;
+    else byPair.set(key, { f, count: 1 });
+  }
+  if (byPair.size === 0) {
+    const f = usable[0];
+    return [{ url: f.url, selector: f.target as string, label: '' }];
+  }
+
+  return [...byPair.entries()]
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, max)
+    .map(([key, { f, count }]) => {
+      const [fg, bg] = key.split('|');
+      const c = (f.context ?? {}) as Record<string, unknown>;
+      const ratio = typeof c.ratio === 'number' ? c.ratio : null;
+      const detail = ratio !== null ? `${ratio}:1` : 'below AA';
+      return {
+        url: f.url,
+        selector: f.target as string,
+        label: `${fg} on ${bg} — ${detail}, ${count} element${count === 1 ? '' : 's'} affected`,
+      };
+    });
+}
+
 function worstSeverity(findings: Finding[]): Severity {
   const order: Severity[] = ['critical', 'serious', 'moderate', 'minor'];
   let worst: Severity = 'minor';
@@ -631,12 +703,19 @@ export function renderActionItems(
     // path: pandoc resolves it against the run directory and embeds the PNG
     // in the .docx, so the delivered document is self-contained.
     const shotId = actionItemShotId(item);
-    if (availableShots.has(shotId)) {
-      lines.push(`![Screenshot: ${headlineFor(item).replace(/[[\]]/g, '')}](shots/${shotId}.png)`);
+    item.shot_samples.forEach((sample, idx) => {
+      const id = idx === 0 ? shotId : `${shotId}-${idx + 1}`;
+      if (!availableShots.has(id)) return;
+      const alt = headlineFor(item).replace(/[[\]]/g, '');
+      lines.push(`![Screenshot: ${alt}](shots/${id}.png)`);
       lines.push('');
-      lines.push('*The red outline marks the element described above.*');
+      lines.push(
+        sample.label
+          ? `*${sample.label}. The red outline marks an affected element.*`
+          : '*The red outline marks the element described above.*',
+      );
       lines.push('');
-    }
+    });
 
     // The body is a sequence of chunks — each is either a metadata line
     // (rendered as `text  ` with a two-space hard break so consecutive
