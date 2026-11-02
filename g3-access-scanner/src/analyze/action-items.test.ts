@@ -414,3 +414,50 @@ test('template items list affected URLs for traceability', () => {
   assert.ok(tpl, 'expected a template task');
   assert.deepEqual([...tpl!.affected_urls].sort(), urls);
 });
+
+test('headlines identify which item they are', () => {
+  const manifest: Manifest = {
+    contract_version: '0.1',
+    site: 'x.test',
+    site_slug: 'x-test',
+    run_id: 'r',
+    started_at: '',
+    ended_at: '2026-11-02T00:00:00Z',
+    urls: ['https://x.test/a', 'https://x.test/services', 'https://x.test/'],
+    tools: { scanner: '', axe_core: '', playwright: '', node: '' },
+    viewport: { w: 0, h: 0 },
+    user_agent: '',
+    wcag_version: '2.2',
+    wcag_levels: ['A', 'AA'],
+  };
+
+  const md = renderActionItems(
+    selectActionItems(
+      [
+        // two different images, both shared chrome → must not read identically
+        makeFinding({
+          finding_type: 'miscategorized-decorative',
+          url: 'https://x.test/a',
+          target: 'a.logo',
+          current_value: '<a href="https://x.test"><img src="/wp-content/uploads/logo-white.png" alt=""></a>',
+        }),
+        makeFinding({
+          finding_type: 'miscategorized-decorative',
+          url: 'https://x.test/a',
+          target: 'a.award',
+          current_value: '<a href="https://x.test/awards"><img src="/wp-content/uploads/award-2026.png" alt=""></a>',
+        }),
+        // page-specific structural work on two different pages
+        makeFinding({ finding_type: 'multiple-h1', url: 'https://x.test/services' }),
+        makeFinding({ finding_type: 'multiple-h1', url: 'https://x.test/' }),
+      ],
+      4,
+    ),
+    manifest,
+  );
+
+  assert.ok(md.includes('logo-white.png'), 'image item names its file');
+  assert.ok(md.includes('award-2026.png'), 'the other image item names its file');
+  assert.ok(md.includes('/services'), 'page-specific item names its page');
+  assert.ok(md.includes('home page'), 'the root page is named readably');
+});

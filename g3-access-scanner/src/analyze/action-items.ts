@@ -704,6 +704,14 @@ export function renderActionItems(items: ActionItem[], manifest: Manifest): stri
   return lines.join('\n');
 }
 
+/**
+ * A headline has to identify WHICH item it is. Ten rows all reading
+ * "add alt text to image-as-link (shared across 6 pages)" are ten genuinely
+ * different images each needing different alt text, but the list is unusable
+ * because nothing tells them apart — the reader has to open every entry to
+ * find out. Give each row the most specific thing available: the quoted text,
+ * else the image filename, else the page it is on.
+ */
 function headlineFor(item: ActionItem): string {
   if (item.level === 'template') {
     return `Site-wide: ${humanType(item.finding_type)}`;
@@ -711,13 +719,51 @@ function headlineFor(item: ActionItem): string {
   // For text-bearing finding types, quote the visible text so the headline
   // disambiguates (e.g., five "Click here" findings each get their own row,
   // and the dev can scan the list without opening every entry).
-  const textHint = item.current_value && QUOTED_HINT_TYPES.has(item.finding_type)
+  let hint = item.current_value && QUOTED_HINT_TYPES.has(item.finding_type)
     ? ` — "${truncate(item.current_value, 40)}"`
     : '';
-  if (item.affected_urls.length > 1) {
-    return `${humanType(item.finding_type)}${textHint} (shared across ${item.affected_urls.length} pages)`;
+
+  // Image findings: the filename is what the editor will recognise in the
+  // media library, and it is what makes one alt-text task distinct from
+  // the next.
+  if (!hint && IMAGE_FINDING_TYPES.has(item.finding_type) && item.current_value) {
+    const file = imageFilename(item.current_value, item.url);
+    if (file) hint = ` — ${file}`;
   }
-  return `${humanType(item.finding_type)}${textHint}`;
+
+  // Page-specific work (heading structure, form fields): name the page, or
+  // three "reduce to a single h1" rows are indistinguishable.
+  if (!hint && item.affected_urls.length === 1 && item.url) {
+    const path = pagePath(item.url);
+    if (path) hint = ` — ${path}`;
+  }
+
+  if (item.affected_urls.length > 1) {
+    return `${humanType(item.finding_type)}${hint} (shared across ${item.affected_urls.length} pages)`;
+  }
+  return `${humanType(item.finding_type)}${hint}`;
+}
+
+/** Basename of the image in an HTML snippet, for use as a headline hint. */
+function imageFilename(html: string, pageUrl: string | null): string | null {
+  const src = extractImageSrc(html, pageUrl ?? 'https://example.invalid/');
+  if (!src) return null;
+  try {
+    const name = new URL(src).pathname.split('/').filter(Boolean).pop();
+    return name ? decodeURIComponent(name) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Path portion of a page URL ("/services"), or "home page" for the root. */
+function pagePath(url: string): string | null {
+  try {
+    const path = new URL(url).pathname.replace(/\/+$/, '');
+    return path === '' ? 'home page' : path;
+  } catch {
+    return null;
+  }
 }
 
 // Finding types whose headline benefits from a quoted snippet of the visible
