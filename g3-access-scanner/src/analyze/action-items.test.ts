@@ -17,6 +17,7 @@ function makeFinding(opts: {
   suggested_fix?: string;
   fingerprint?: string;
   wcag?: string;
+  context?: Record<string, unknown>;
 }): Finding {
   return {
     check: opts.finding_type,
@@ -31,6 +32,7 @@ function makeFinding(opts: {
     suggested_fix: opts.suggested_fix ?? null,
     confidence: 'high',
     fingerprint: opts.fingerprint,
+    context: opts.context,
   };
 }
 
@@ -117,23 +119,87 @@ test('mixed instance + template tasks coexist in one selection', () => {
   assert.equal(templates[0].covers_findings, 5);
 });
 
-test('text contrast types are excluded — out of scope for the agency engagement', () => {
-  // All three text-contrast levels should be filtered out entirely.
+test('text contrast is INCLUDED, collapsed to one template item per type', () => {
+  // Previously excluded as "a brand decision". That hid the single
+  // highest-impact change on a site: on wmmc.com one grey drove 456 of 643
+  // findings and never appeared in the action items. Contrast is a template
+  // fix, so volume cannot flood the document.
   const findings = [
-    makeFinding({ finding_type: 'contrast-below-aa-normal', url: 'https://x.test/a' }),
-    makeFinding({ finding_type: 'contrast-below-aa-large', url: 'https://x.test/b' }),
-    makeFinding({ finding_type: 'contrast-below-aaa', url: 'https://x.test/c' }),
-    // Sanity: a non-excluded item gets through so we know selection isn't broken.
-    makeFinding({ finding_type: 'missing-alt', url: 'https://x.test/d' }),
+    ...Array.from({ length: 40 }, (_, i) =>
+      makeFinding({
+        finding_type: 'contrast-below-aa-normal',
+        url: `https://x.test/p${i % 4}`,
+        context: { foreground_hex: '#7f7f7f', background_hex: '#ffffff', ratio: 4, required: 4.5 },
+      }),
+    ),
+    makeFinding({
+      finding_type: 'contrast-below-aa-normal',
+      url: 'https://x.test/p0',
+      context: { foreground_hex: '#949797', background_hex: '#ffffff', ratio: 2.94, required: 4.5 },
+    }),
+    makeFinding({ finding_type: 'missing-alt', url: 'https://x.test/p0' }),
   ];
 
   const items = selectActionItems(findings, 4);
-  const types = items.map((i) => i.finding_type);
+  const contrast = items.filter((i) => i.finding_type === 'contrast-below-aa-normal');
 
-  assert.ok(!types.includes('contrast-below-aa-normal'));
-  assert.ok(!types.includes('contrast-below-aa-large'));
-  assert.ok(!types.includes('contrast-below-aaa'));
-  assert.ok(types.includes('missing-alt'), 'non-excluded types still selected');
+  assert.equal(contrast.length, 1, '41 contrast findings collapse to ONE item');
+  assert.equal(contrast[0].level, 'template');
+  assert.equal(contrast[0].covers_findings, 41);
+  assert.ok(items.some((i) => i.finding_type === 'missing-alt'), 'other types unaffected');
+});
+
+test('contrast item names the distinct pairs and calls out the dominant one', () => {
+  const findings = [
+    ...Array.from({ length: 9 }, () =>
+      makeFinding({
+        finding_type: 'contrast-below-aa-normal',
+        url: 'https://x.test/a',
+        context: { foreground_hex: '#7f7f7f', background_hex: '#ffffff', ratio: 4, required: 4.5 },
+      }),
+    ),
+    makeFinding({
+      finding_type: 'contrast-below-aa-normal',
+      url: 'https://x.test/a',
+      context: { foreground_hex: '#949797', background_hex: '#ffffff', ratio: 2.94, required: 4.5 },
+    }),
+  ];
+
+  const item = selectActionItems(findings, 1).find((i) => i.finding_type === 'contrast-below-aa-normal')!;
+
+  assert.ok(item.guidance.includes('#7f7f7f on #ffffff'), 'names the dominant pair');
+  assert.ok(item.guidance.includes('#949797 on #ffffff'), 'names the secondary pair');
+  assert.ok(item.guidance.includes('90%'), 'states the dominant pair\'s share');
+  assert.ok(/needs 4.5:1/.test(item.guidance), 'states the required ratio');
+});
+
+test('a repeated component collapses to one task even with per-instance selectors', () => {
+  // Provider cards give every instance its own nth-of-type selector. Keying
+  // on the selector produced 11 identical "View Practice Page" tasks on
+  // wmmc.com, each claiming to be a discrete fix.
+  const findings = Array.from({ length: 11 }, (_, i) =>
+    makeFinding({
+      finding_type: 'redundant-link-text',
+      url: 'https://x.test/provider-finder',
+      target: `.card:nth-of-type(${i + 1}) > a`,
+      current_value: 'View Practice Page',
+    }),
+  );
+
+  const items = selectActionItems(findings, 1).filter((i) => i.finding_type === 'redundant-link-text');
+
+  assert.equal(items.length, 1, 'one task, not eleven');
+  assert.equal(items[0].covers_findings, 11, 'but it still reports all 11 occurrences');
+});
+
+test('genuinely different values stay as separate tasks', () => {
+  const findings = [
+    makeFinding({ finding_type: 'redundant-link-text', url: 'https://x.test/a', target: 'a.one', current_value: 'Read more' }),
+    makeFinding({ finding_type: 'redundant-link-text', url: 'https://x.test/a', target: 'a.two', current_value: 'Click here' }),
+  ];
+
+  const items = selectActionItems(findings, 1).filter((i) => i.finding_type === 'redundant-link-text');
+  assert.equal(items.length, 2, 'different link text is a different fix');
 });
 
 test('non-text contrast (UI elements) is NOT excluded', () => {

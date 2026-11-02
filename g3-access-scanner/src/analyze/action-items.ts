@@ -225,12 +225,17 @@ const TEMPLATE_TIME: Record<string, number> = {
 // Reported in the audit but excluded from the action items list. Each
 // exclusion needs an explicit rationale below.
 const EXCLUDED_FROM_ACTION_ITEMS: ReadonlySet<string> = new Set([
-  // Text contrast: requires brand/design decisions the client has to make.
-  // Keep `non-text-contrast-below-aa` (UI borders/icons) since those tend
-  // to be developer-driven CSS tweaks.
-  'contrast-below-aa-normal',
-  'contrast-below-aa-large',
-  'contrast-below-aaa',
+  // Text contrast was excluded here on the grounds that it needs a brand
+  // decision the client has to make. That reasoning holds for the *choice* of
+  // replacement colour, but excluding it entirely meant the single
+  // highest-impact change on a site could be absent from the document the
+  // client works from — on wmmc.com one grey accounted for 456 of 643
+  // findings and did not appear in the action items at all.
+  //
+  // Text contrast is FIX_LEVEL 'template', so it collapses to one item per
+  // contrast type regardless of how many elements fail. The item names the
+  // exact hex pairs and states that picking the replacement is a brand
+  // decision, which keeps the original caveat without hiding the work.
 ]);
 
 // Finding types where the flagged element IS an image. For these, action-items
@@ -312,7 +317,7 @@ const INSTANCE_GUIDANCE: Record<string, string> = {
 
 // Per-finding-type guidance, template flavor (one site-wide change).
 const TEMPLATE_GUIDANCE: Record<string, string> = {
-  'contrast-below-aa-normal': 'Update text/background color pairs in your stylesheet to meet 4.5:1 contrast minimum for normal text. Findings list exact hex pairs.',
+  'contrast-below-aa-normal': 'Darken the text colour (or lighten the background) so every pair reaches 4.5:1 for normal text. Choosing the replacement shade is a brand decision — the pairs and current ratios are listed below so a designer can pick one that stays on-brand.',
   'contrast-below-aa-large': 'Update text/background color pairs for large text (18pt+ or 14pt+ bold) to meet 3:1 minimum.',
   'contrast-below-aaa': 'Optional: tighten contrast pairs to AAA threshold (7:1 normal, 4.5:1 large).',
   'non-text-contrast-below-aa': 'Update borders/icons/UI components to meet 3:1 contrast against adjacent colors.',
@@ -406,7 +411,11 @@ export function selectActionItems(findings: Finding[], totalPages: number): Acti
         url: null,
         selector: null,
         current_value: sampleCurrentValue(group),
-        guidance: TEMPLATE_GUIDANCE[type] ?? group[0].suggested_fix ?? '',
+        guidance:
+          (TEMPLATE_GUIDANCE[type] ?? group[0].suggested_fix ?? '') +
+          (type.startsWith('contrast-below') || type === 'non-text-contrast-below-aa'
+            ? contrastPairsSummary(group)
+            : ''),
         wcag_refs: collectWcag(group),
         pages_affected: pagesAffected,
         covers_findings: group.length,
@@ -428,8 +437,17 @@ export function selectActionItems(findings: Finding[], totalPages: number): Acti
       const byElement = new Map<string, Finding[]>();
       const groupable = CROSS_PAGE_GROUPABLE.has(type);
       for (const f of group) {
+        // Repeated components (provider cards, news tiles) give every instance
+        // its own nth-of-type selector, so keying on the selector split one
+        // template fix into many identical tasks — wmmc.com produced 11
+        // "View Practice Page" items and 10 image-alt items, each claiming to
+        // be a discrete fix while its own body said "fix once in the
+        // template/CMS". For groupable types the visible value is the real
+        // identity of the issue; fall back to the selector only when there is
+        // no value to group on.
+        const groupValue = f.current_value?.trim();
         const key = groupable
-          ? `${f.target ?? ''}|${f.current_value ?? ''}`
+          ? (groupValue ? `val|${groupValue}` : `sel|${f.target ?? ''}|`)
           : `__nogroup__${candidates.length}__${f.url}__${f.target ?? ''}`;
         if (!byElement.has(key)) byElement.set(key, []);
         byElement.get(key)!.push(f);
@@ -495,6 +513,41 @@ export function selectActionItems(findings: Finding[], totalPages: number): Acti
     const { score, ...item } = s;
     return { ...item, rank: i + 1 };
   });
+}
+
+/**
+ * For contrast items, list the distinct colour pairs behind the finding count.
+ * One grey can account for hundreds of findings, and "459 contrast failures"
+ * reads as a far bigger job than "four colour pairs, one of them 99% of it".
+ * Without this the client cannot see which single change does the most.
+ */
+function contrastPairsSummary(findings: Finding[]): string {
+  const pairs = new Map<string, { fg: string; bg: string; ratio: number; required: number; count: number }>();
+  for (const f of findings) {
+    const c = (f.context ?? {}) as Record<string, unknown>;
+    const fg = typeof c.foreground_hex === 'string' ? c.foreground_hex : null;
+    const bg = typeof c.background_hex === 'string' ? c.background_hex : null;
+    if (!fg || !bg) continue;
+    const ratio = typeof c.ratio === 'number' ? c.ratio : 0;
+    const required = typeof c.required === 'number' ? c.required : 0;
+    const key = `${fg}|${bg}`;
+    const hit = pairs.get(key);
+    if (hit) hit.count++;
+    else pairs.set(key, { fg, bg, ratio, required, count: 1 });
+  }
+  if (pairs.size === 0) return '';
+  const sorted = [...pairs.values()].sort((a, b) => b.count - a.count);
+  const lines = sorted.map(
+    (p) => `${p.fg} on ${p.bg} — ${p.ratio}:1, needs ${p.required}:1 (${p.count} element${p.count === 1 ? '' : 's'})`,
+  );
+  const total = sorted.reduce((n, p) => n + p.count, 0);
+  const lead = sorted[0];
+  const share = total > 0 ? Math.round((lead.count / total) * 100) : 0;
+  const headline =
+    sorted.length > 1 && share >= 50
+      ? ` ${sorted.length} colour pairs are involved, and ${lead.fg} on ${lead.bg} alone accounts for ${share}% of them — changing that one pair is the largest single improvement available.`
+      : '';
+  return `${headline} Pairs: ${lines.join('; ')}.`;
 }
 
 function worstSeverity(findings: Finding[]): Severity {
